@@ -1,0 +1,115 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    @apply bg-slate-50 text-slate-800 antialiased;
+  }
+}
+
+/* Light professional surfaces (replaces dark glass) */
+.glass-panel {
+  @apply bg-white border border-slate-200 rounded-xl shadow-sm;
+}
+
+.glass-panel-light {
+  @apply bg-white border border-slate-200 rounded-lg;
+}
+
+.glass-card {
+  @apply bg-white border border-slate-200 rounded-lg transition-shadow;
+}
+
+.glass-card:hover {
+  @apply border-brand-200 shadow-md;
+}
+
+/* Operational Status Badges — light theme */
+.badge-available {
+  @apply bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 rounded-full text-xs font-semibold inline-flex items-center gap-1.5;
+}
+
+.badge-busy {
+  @apply bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-0.5 rounded-full text-xs font-semibold inline-flex items-center gap-1.5;
+}
+
+.badge-maintenance {
+  @apply bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-0.5 rounded-full text-xs font-semibold inline-flex items-center gap-1.5;
+}
+
+.badge-offline {
+  @apply bg-slate-100 text-slate-600 border border-slate-200 px-2.5 py-0.5 rounded-full text-xs font-semibold inline-flex items-center gap-1.5;
+}
+
+.badge-pending {
+  @apply bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-0.5 rounded-full text-xs font-semibold inline-flex items-center gap-1.5;
+}
+
+.badge-completed {
+  @apply bg-teal-50 text-teal-700 border border-teal-200 px-2.5 py-0.5 rounded-full text-xs font-semibold inline-flex items-center gap-1.5;
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #e2e8f0 0%, #f1f5f9 40%, #e2e8f0 80%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.35); }
+  70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(37, 99, 235, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+}
+
+.live-pulse {
+  animation: pulse-dot 2s infinite;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Map legacy dark utility classes inside portal views */
+.app-portal thead {
+  @apply bg-slate-50 text-slate-600;
+}
+
+.app-portal .divide-slate-800\/60 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgb(226 232 240);
+}
+
+.app-portal h1,
+.app-portal h2,
+.app-portal h3,
+.app-portal h4,
+.app-portal h5,
+.app-portal strong {
+  @apply text-slate-900;
+}
+
+.app-portal input,
+.app-portal select,
+.app-portal textarea {
+  @apply bg-white border-slate-300 text-slate-900;
+}

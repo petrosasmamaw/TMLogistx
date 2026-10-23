@@ -1,0 +1,162 @@
+// Amharic (አማርኛ) Localization Dictionary for TMLogistx Mobile
+
+export const am = {
+  // App Header & Navigation
+  appTitle: "ቲኤም ሎጂስቲክስ",
+  appSubtitle: "የሰራተኞች እንቅስቃሴ እና የተሽከርካሪ መርከብ አስተዳደር",
+  staffPortal: "የሰራተኞች የጉዞ ፖርታል",
+  driverPortal: "የአሽከርካሪዎች መቆጣጠሪያ ኮንሶል",
+  switchLanguage: "English",
+  quickDemo: "የሙከራ መለያዎች",
+  logout: "ውጣ",
+  welcome: "እንኳን ደህና መጡ",
+
+  // Roles
+  role_STAFF_MEMBER: "የድርጅቱ ሰራተኛ",
+  role_DRIVER: "የተሽከርካሪ አሽከርካሪ",
+  role_LOGISTICS_COORDINATOR: "የሎጂስቲክስ አስተባባሪ",
+  role_MOVEMENT_OFFICER: "የእንቅስቃሴ መኮንን",
+
+  // Navigation Tabs
+  tabRequest: "ጉዞ ጠይቅ",
+  tabActiveRide: "ወቅታዊ ጉዞ",
+  tabHistory: "የጉዞ ታሪክ",
+  tabAssigned: "የተመደቡ ጉዞዎች",
+  tabTripWorkflow: "የጉዞ ደረጃዎች",
+  tabPerformance: "የስራ አፈፃፀም",
+
+  // Movement Request Form
+  requestTitle: "የሰራተኛ ጉዞ ጥያቄ ማቅረቢያ",
+  requestSubtitle: "ለፕሮጀክት ስራ እና እንቅስቃሴ የትራንስፖርት ጥያቄ ያስገቡ",
+  pickupLocation: "የመነሻ ቦታ",
+  pickupPlaceholder: "ለምሳሌ፦ ቦሌ ዓለም አቀፍ አውሮፕላን ማረፊያ፣ በር 2",
+  destination: "የመድረሻ ቦታ",
+  destinationPlaceholder: "ለምሳሌ፦ የተባበሩት መንግስታት ኢኮኖሚክ ኮሚሽን (UNECA)",
+  pickupDateTime: "የመነሻ ቀን እና ሰዓት",
+  pickupTimeLabel: "የጉዞ መርሃ ግብር",
+  passengerCount: "የተሳፋሪዎች ቁጥር",
+  passengersHelper: "ከ 1 እስከ 12 ሰዎች",
+  purpose: "የጉዞው ዓላማ",
+  purposePlaceholder: "ለምሳሌ፦ የመስክ ተልዕኮ፣ የልዑካን አጃቢ፣ የደንበኛ ሳይት ኦዲት",
+  cargoNotes: "የዕቃ / ጭነት ዝርዝር (አማራጭ)",
+  cargoPlaceholder: "ለምሳሌ፦ 2 ትላልቅ ሳጥኖች፣ የቅየሳ መሳሪያዎች",
+  submitRequestBtn: "የጉዞ ጥያቄውን ላክ",
+  submitting: "በመላክ ላይ...",
+  requestSuccess: "የጉዞ ጥያቄዎ በተሳካ ሁኔታ ቀርቧል! የእንቅስቃሴ መኮንን ተመልክቶ ይመድባል!",
+  validationError: "እባክዎ የመነሻ ቦታ፣ የመድረሻ ቦታ እና የጉዞውን ዓላማ ይሙሉ!",
+
+  // Active Ride Screen (Staff)
+  activeRideTitle: "የቀጥታ ጉዞ ሁኔታ",
+  activeRideSubtitle: "የተመደበው ተሽከርካሪ እንቅስቃሴ የቀጥታ መከታተያ",
+  noActiveRide: "በአሁኑ ሰዓት ምንም ገቢር ጉዞ የለም",
+  noActiveRideDesc: "በሂደት ላይ ያለ ጉዞ የለዎትም። አዲስ ትራንስፖርት ለማስያዝ አዲስ ጥያቄ ያቅርቡ።",
+  assignedVehicle: "የተመደበ ተሽከርካሪ",
+  driverDetails: "የተመደበ አሽከርካሪ",
+  callDriver: "ለአሽከርካሪው ደውል",
+  etaLabel: "የሚደርስበት ግምታዊ ሰዓት (ETA)",
+  distanceRemaining: "የቀረው ርቀት",
+  currentProgress: "የጉዞው ደረጃ",
+
+  // Trip Statuses (Pipeline)
+  status_PENDING: "የአሽከርካሪ ምደባ በመጠባበቅ ላይ",
+  status_APPROVED: "የፀደቀ",
+  status_ASSIGNED: "አሽከርካሪ ተመድቧል",
+  status_ACCEPTED: "አሽከርካሪው ተቀብሎታል",
+  status_REJECTED: "አሽከርካሪው አልተቀበለውም",
+  status_EXTERNAL_AUTHORIZED: "ኡበር / ራይድ ተፈቅዷል",
+  status_HEADING_TO_PICKUP: "አሽከርካሪው ወደ መነሻ ቦታ እየመጣ ነው",
+  status_ARRIVED: "አሽከርካሪው መነሻ ቦታ ደርሷል",
+  status_PASSENGER_PICKED_UP: "ተሳፋሪ ተሳፍሯል",
+  status_IN_TRANSIT: "ወደ መድረሻው ጉዞ ላይ ነው",
+  status_COMPLETED: "ጉዞው ተጠናቋል",
+  status_CANCELLED: "ተሰርዟል",
+
+  // External Transport (Uber / RIDE) Workflow
+  uberAuthorizedBadge: "ኡበር / ራይድ ታክሲ ተፈቅዷል",
+  uberAuthorizedNotice: "ለተጠየቀው ሰዓት የድርጅቱ ተሽከርካሪ ባለመኖሩ ምክንያት የእንቅስቃሴ መኮንን የውጭ ታክሲ (ራይድ / ኡበር) እንዲጠቀሙ ፈቅዷል።",
+  callUberRide: "ራይድ / ኡበር ታክሲ ጥራ",
+  callRide8294: "ወደ ራይድ መስመር ደውል (8294)",
+  startExternalRideBtn: "ጉዞ ጀምር (አሁን ተነሳ)",
+  endExternalRideBtn: "ጉዞ ጨርስ (መድረሻ ደርሻለሁ)",
+  rideStartedNotice: "ጉዞው ተጀምሯል! የመነሻ ሰዓት እና መጋጠሚያዎች ተመዝግበዋል።",
+  enterFarePrompt: "ጉዞው ተጠናቋል! የተከፈለውን የታክሲ ክፍያ ያስገቡ",
+  fareAmountLabel: "የተከፈለው የገንዘብ መጠን (ብር)",
+  distanceCalculatedLabel: "የተጓዙት ርቀት",
+  receiptNotesLabel: "የደረሰኝ ማስታወሻ / ኮድ (አማራጭ)",
+  submitExternalRideBtn: "ክፍያውን አስመዝግብና ጉዞውን አጠናቅቅ",
+
+  // Driver Console Screens
+  driverConsoleTitle: "የተመደቡ ጉዞዎች",
+  driverConsoleSubtitle: "የቀኑ የጉዞ መርሃ-ግብር እና የስምሪት ትኬቶች",
+  noAssignedTrips: "የተመደበ ጉዞ የለም",
+  noAssignedTripsDesc: "በአሁኑ ሰዓት የተመደበ የጉዞ ትኬት የለዎትም። ለአዲስ ስምሪት ይጠብቁ።",
+  acceptAssignment: "ጉዞውን ተቀበል",
+  rejectAssignment: "አትቀበል (ውድቅ)",
+  rejectPromptTitle: "ያልተቀበሉበት ምክንያት",
+  rejectPlaceholder: "ለምሳሌ፦ የተሽከርካሪ ፍተሻ ተይዟል፣ የመንገድ መዘጋት አለ",
+  confirmReject: "ውድቅ ማድረጉን አረጋግጥ",
+  cancel: "ተመለስ",
+
+  // Driver Workflow Stepper Buttons
+  stepperHeading: "1. ወደ መነሻው ጉዞ ጀምር",
+  stepperArrived: "2. መነሻ ቦታ ደርሻለሁ",
+  stepperBoarded: "3. ተሳፋሪ ተሳፍሯል - ጉዞ ጀምር",
+  stepperComplete: "4. ጉዞውን ጨርስ (አጠናቅቅ)",
+  stepperFinished: "ጉዞው በተሳካ ሁኔታ ተጠናቋል",
+  openNavigation: "ካርታ እና አቅጣጫ ክፈት (Navigation)",
+
+  driveDistanceTitle: "የጉዞ ርቀት (ካርታ እና ጂፒኤስ)",
+  driveDistanceSubtitle: "መንዳት ሲጀምሩ ጀምር ይጫኑ፣ በመድረሻ ያበቃ ይጫኑ። ካርታ ወይም ጂፒኤስ ካልሰራ በእጅ ርቀት ያስገቡ።",
+  driveDistanceStart: "መንዳት ጀምር",
+  driveDistanceEnd: "መንዳት አበቃ",
+  driveDistanceGpsPath: "የጂፒኤስ መስመር",
+  driveDistanceMapEstimate: "የካርታ ግምት",
+  driveDistanceTrackingLive: "መንገድ በመቅረጽ ላይ — በመንዳት ወቅት አፕሉን ክፈት ይቆዩ",
+  driveDistanceManualMode: "ርቀት በእጅ ያስገቡ",
+  driveDistanceManualHint: "ካርታ ወይም ጂፒኤስ ካልሰራ ወይም ትክክል ካልሆነ",
+  driveDistanceManualPlaceholder: "ለምሳሌ 12.5",
+  driveDistanceStartedTitle: "መንዳት ተጀመረ",
+  driveDistanceStartedMsg: "መነሻ ቦታ ተመዝግቧል። ርቀት በመንገድዎ ይሰላል።",
+  driveDistanceEndedTitle: "መንዳት ተጠናቀቀ",
+  driveDistanceEndedMsg: "የጂፒኤስ እና የካርታ ርቀት ይመልከቱ ወይም በእጅ ያስገቡ።",
+  driveDistanceRequiredTitle: "ርቀት ያስፈልጋል",
+  driveDistanceRequiredMsg: "ጉዞ ከመጠናቀቅዎ በፊት መንዳት ጀምር/አበቃ ይጫኑ ወይም ርቀት በእጅ ያስገቡ።",
+  driveDistanceRecorded: "ርቀት ተመዝግቧል",
+
+  // Live GPS Simulation
+  gpsBroadcaster: "የቀጥታ ቴሌማቲክስ",
+  gpsBroadcastingActive: "ጂፒኤስ ነቅቷል፦ መጋጠሚያዎች እየተላኩ ነው",
+  gpsIntervalNotice: "በየ 10 ሴኮንዱ የቦታ ማሻሻያ ይደረጋል",
+
+  // Incident & Breakdown Modal
+  reportIncidentBtn: "ብልሽት / አደጋ ሪፖርት አድርግ",
+  incidentModalTitle: "የጉዞ አደጋ / ችግር ሪፖርት ማድረጊያ",
+  incidentType: "የችግሩ ዓይነት",
+  incidentType_BREAKDOWN: "የሞተር / መካኒካል ብልሽት",
+  incidentType_FLAT_TIRE: "ጎማ መፈንዳት / መተንፈስ",
+  incidentType_ACCIDENT: "የትራፊክ ግጭት / አደጋ",
+  incidentType_TRAFFIC_DELAY: "ከፍተኛ የትራፊክ መጨናነቅ / መንገድ መዘጋት",
+  incidentType_OTHER: "ሌላ ችግር",
+  severity: "የአደጋው ክብደት",
+  severity_LOW: "ዝቅተኛ (አነስተኛ መዘግየት)",
+  severity_MEDIUM: "መካከለኛ (እርዳታ የሚያስፈልገው)",
+  severity_CRITICAL: "አስቸኳይ (ተሽከርካሪው መንቀሳቀስ አይችልም)",
+  incidentDescription: "የአደጋው ዝርዝር ማብራሪያ",
+  incidentPlaceholder: "ያሉበትን ትክክለኛ ቦታ፣ የተሽከርካሪውን ሁኔታ እና አስቸኳይ ፍላጎት ይግለጹ...",
+  submitIncident: "የአደጋ ማስጠንቀቂያውን ላክ",
+
+  // History Screen
+  historyTitle: "የጉዞ ታሪክ",
+  historySubtitle: "ያደረጓቸው ያለፉ ጉዞዎች መዝገብ",
+  noHistory: "ምንም የተጠናቀቀ የጉዞ መዝገብ አልተገኘም።",
+  tripId: "የጉዞ መለያ ቁጥር",
+  date: "ቀን",
+  project: "ፕሮጀክት",
+
+  // Demo User Switcher
+  quickSwitchTitle: "የሙከራ መለያ ይምረጡ",
+  quickStaffEth: "አሚና አል-መንሱር (ሰራተኛ - ኢትዮጵያ)",
+  quickStaffKen: "ዴቪድ ምዋንጊ (ሰራተኛ - ኬንያ)",
+  quickDriverAbebe: "አበበ ቢቂላ (አሽከርካሪ - ላንድ ክሩዘር)",
+  quickDriverJohn: "ጆን ኦቺየንግ (አሽከርካሪ - ሃይሉክስ 4x4)"
+};

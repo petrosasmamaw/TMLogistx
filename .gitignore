@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build / cache
+dist/
+build/
+.expo/
+web-app/dist/
+*.log
+
+# Secrets & local env
+.env
+.env.*
+!.env.example
+**/.env
+
+# Local runtime data
+server/data/runtime-store.json
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Cursor
+.cursor/
