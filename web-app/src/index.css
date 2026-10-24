@@ -113,3 +113,128 @@
 .app-portal textarea {
   @apply bg-white border-slate-300 text-slate-900;
 }
+
+/* —— Mobile-first portal (lg+ keeps desktop sidebar layout) —— */
+.portal-main {
+  @apply px-4 py-4 pb-28 lg:px-8 lg:py-6 lg:pb-6;
+}
+
+@keyframes mobile-sheet-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.mobile-sheet-enter {
+  animation: mobile-sheet-up 0.24s ease-out;
+}
+
+@media (max-width: 1023px) {
+  .app-portal .portal-table-scroll {
+    @apply -mx-4 px-4;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .app-portal .portal-table-scroll table {
+    min-width: 640px;
+  }
+
+  .app-portal .portal-stat-row {
+    @apply grid grid-cols-2 gap-3;
+  }
+
+  .app-portal .portal-map-panel {
+    min-height: 52vh;
+    max-height: 62vh;
+  }
+
+  .app-portal .portal-dispatch-inbox {
+    max-height: min(58vh, 520px);
+  }
+}
+
+@media (min-width: 1024px) {
+  .app-portal .portal-dispatch-inbox {
+    max-height: 750px;
+  }
+
+  .field-control {
+    min-height: 0;
+    font-size: 0.875rem;
+    padding: 0.625rem 0.75rem;
+  }
+}
+
+/* Page rhythm */
+.portal-page {
+  @apply space-y-5 sm:space-y-6 max-w-[1600px] mx-auto w-full;
+}
+
+/* Mobile-first form controls (portal + login) */
+.field-control {
+  min-height: 48px;
+  font-size: 1rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: 0.75rem;
+}
+
+.login-shell .field-control {
+  @apply min-h-[48px] text-base;
+}
+
+.login-shell button[type='submit'] {
+  @apply min-h-[48px] text-base;
+}
+
+@media (max-width: 1023px) {
+  .app-portal button:not(.no-touch-target),
+  .app-portal .portal-btn {
+    min-height: 44px;
+  }
+
+  .app-portal .portal-modal-backdrop,
+  .login-shell .portal-modal-backdrop {
+    @apply p-0 items-end;
+  }
+
+  .app-portal .portal-modal-panel,
+  .login-shell .portal-modal-panel {
+    @apply w-full max-w-none rounded-t-2xl rounded-b-none;
+    max-height: min(92vh, 100dvh);
+    margin-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Legacy modals without PortalModal — bottom sheet on phone */
+  .app-portal .fixed.inset-0.z-50.flex.items-center.justify-center {
+    align-items: flex-end !important;
+    padding: 0 !important;
+  }
+
+  .app-portal .fixed.inset-0.z-50.flex.items-center.justify-center > .glass-panel,
+  .app-portal .fixed.inset-0.z-50.flex.items-center.justify-center > form.glass-panel,
+  .app-portal .fixed.inset-0.z-50.flex.items-center.justify-center > .portal-modal-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-radius: 1rem 1rem 0 0 !important;
+    max-height: min(92vh, 100dvh);
+    overflow-y: auto;
+    margin-bottom: env(safe-area-inset-bottom);
+  }
+
+  .portal-data-cards {
+    @apply divide-y divide-slate-100;
+  }
+
+}
+
+@media (min-width: 1024px) {
+  .portal-mobile-only {
+    display: none !important;
+  }
+}

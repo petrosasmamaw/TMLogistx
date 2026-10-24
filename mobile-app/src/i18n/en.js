@@ -3,7 +3,7 @@
 export const en = {
   // App Header & Navigation
   appTitle: "TMLogistx",
-  appSubtitle: "Staff Movement & Fleet System",
+  appSubtitle: "Fleet & Movement",
   staffPortal: "Staff Movement Portal",
   driverPortal: "Driver Fleet Console",
   switchLanguage: "አማርኛ",

@@ -335,7 +335,7 @@ export default function FleetWorkersPanel({ onCountsChange, onDriversChanged }) 
       </div>
 
       {shiftModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="portal-modal-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <form onSubmit={handleSaveDriverShift} className="glass-panel p-6 rounded-2xl w-full max-w-md border border-slate-300 space-y-4 text-xs">
             <h3 className="text-base font-bold text-slate-900">Driver shift — {shiftModal.worker.full_name}</h3>
             <div>

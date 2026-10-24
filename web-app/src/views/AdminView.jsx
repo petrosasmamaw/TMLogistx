@@ -684,7 +684,7 @@ export default function AdminView() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="portal-page">
       {/* Trips overview */}
       {activeTab === 'rides' && (
         <div className="space-y-4">
@@ -736,7 +736,7 @@ export default function AdminView() {
                 Refresh
               </button>
             </div>
-            <div className="overflow-x-auto">
+            <div className="portal-table-scroll overflow-x-auto">
               <table className="w-full text-left text-xs min-w-[960px]">
                 <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-semibold border-b border-slate-200">
                   <tr>
@@ -970,7 +970,7 @@ export default function AdminView() {
             </h2>
             <span className="text-xs text-slate-400">{projects.length} Projects Configured</span>
           </div>
-          <div className="overflow-x-auto">
+          <div className="portal-table-scroll overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-200">
                 <tr>
@@ -1121,7 +1121,7 @@ export default function AdminView() {
                 <p className="text-slate-500">All personal vehicle trips have either been settled or none logged yet.</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="portal-table-scroll overflow-x-auto">
                 <table className="w-full text-left text-xs min-w-[900px]">
                   <thead className="bg-slate-50 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-200">
                     <tr>
@@ -1327,7 +1327,7 @@ export default function AdminView() {
             </h2>
             <span className="text-xs text-slate-400">{filteredUsers.length} shown</span>
           </div>
-          <div className="overflow-x-auto">
+          <div className="portal-table-scroll overflow-x-auto">
           <table className="w-full text-left text-xs min-w-[720px]">
             <thead className="bg-slate-50 text-slate-400 uppercase font-semibold border-b border-slate-200">
               <tr>
@@ -1430,7 +1430,7 @@ export default function AdminView() {
 
       {/* Modal: Edit country */}
       {editingCountry && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="portal-modal-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-panel p-6 rounded-2xl w-full max-w-md border border-slate-300 space-y-4">
             <h3 className="text-base font-bold text-slate-900">Edit country</h3>
             <form onSubmit={handleSaveCountryEdit} className="space-y-3 text-xs">
@@ -1476,7 +1476,7 @@ export default function AdminView() {
 
       {/* Modal: Edit worker */}
       {editingUser && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="portal-modal-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-panel p-6 rounded-2xl w-full max-w-md border border-slate-300 space-y-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-base font-bold text-slate-900">
               {editingUser.role === 'MASTER_PERSON' ? 'Edit master person' : 'Edit worker'}
@@ -1614,7 +1614,7 @@ export default function AdminView() {
 
       {/* Modal: Create worker (any role) */}
       {showWorkerModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="portal-modal-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-panel p-6 rounded-2xl w-full max-w-md border border-slate-300 space-y-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <Users className="w-5 h-5 text-brand-600" /> Create worker account
@@ -1770,7 +1770,7 @@ export default function AdminView() {
 
       {/* Modal: Settle Personal Fuel Payment */}
       {showSettleModal && selectedRecovery && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="portal-modal-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-panel p-6 rounded-2xl w-full max-w-md border border-emerald-500/40 space-y-4">
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <CreditCard className="w-5 h-5 text-emerald-600" /> Confirm Fuel Debt Payment
@@ -1814,7 +1814,7 @@ export default function AdminView() {
 
       {/* Modal: Edit Policy */}
       {editingPolicy && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="portal-modal-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-panel p-6 rounded-2xl w-full max-w-xl border border-blue-500/40 space-y-4">
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <FileText className="w-5 h-5 text-blue-400" />
@@ -1865,7 +1865,7 @@ export default function AdminView() {
 
       {/* Modal: Edit project */}
       {editingProject && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="portal-modal-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-panel p-6 rounded-2xl w-full max-w-md border border-slate-300 space-y-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <FolderKanban className="w-5 h-5 text-brand-600" /> Edit project
@@ -1955,7 +1955,7 @@ export default function AdminView() {
 
       {/* Modal: Add Country */}
       {showCountryModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="portal-modal-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-panel p-6 rounded-2xl w-full max-w-md border border-slate-300 space-y-4">
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <Globe className="w-5 h-5 text-brand-600" /> Add Country Hub
@@ -2020,7 +2020,7 @@ export default function AdminView() {
 
       {/* Modal: Create Master Person */}
       {showMasterModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="portal-modal-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-panel p-6 rounded-2xl w-full max-w-md border border-slate-300 space-y-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <UserCheck className="w-5 h-5 text-brand-600" /> Create Master Person
@@ -2136,7 +2136,7 @@ export default function AdminView() {
 
       {/* Modal: Assign master to existing project */}
       {showAssignMasterModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="portal-modal-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-panel p-6 rounded-2xl w-full max-w-sm border border-slate-300 space-y-4">
             <h3 className="text-base font-bold text-slate-900">Assign Master Person</h3>
             <form onSubmit={handleConfirmAssignMaster} className="space-y-3 text-xs">
@@ -2180,7 +2180,7 @@ export default function AdminView() {
 
       {/* Modal: Add Project */}
       {showProjectModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="portal-modal-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-panel p-6 rounded-2xl w-full max-w-md border border-slate-300 space-y-4">
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <FolderKanban className="w-5 h-5 text-brand-600" /> Create Logistics Project

@@ -16,6 +16,7 @@ import { colors } from '../theme/colors';
 import { useTranslation } from '../i18n';
 import { Ionicons } from '@expo/vector-icons';
 import LoadingButton from '../components/LoadingButton';
+import BrandLogo from '../components/BrandLogo';
 
 export const AuthScreen = () => {
   const dispatch = useDispatch();
@@ -52,9 +53,7 @@ export const AuthScreen = () => {
         </View>
 
         <View style={styles.heroSection}>
-          <View style={styles.logoBadge}>
-            <Text style={styles.logoBadgeText}>TM</Text>
-          </View>
+          <BrandLogo size={64} style={styles.logoBadge} />
           <Text style={styles.appTitle}>{t('appTitle')}</Text>
           <Text style={styles.appSubtitle}>{t('appSubtitle')}</Text>
         </View>
@@ -156,18 +155,7 @@ const styles = StyleSheet.create({
     marginVertical: 24,
   },
   logoBadge: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
-    backgroundColor: colors.amber,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginBottom: 12,
-  },
-  logoBadgeText: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: '900',
   },
   appTitle: {
     color: colors.textPrimary,

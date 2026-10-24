@@ -287,7 +287,7 @@ export default function LogisticsView() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="portal-page">
       <AdminSectionHeader
         icon={sectionMeta.icon}
         title={sectionMeta.title}
@@ -369,7 +369,7 @@ export default function LogisticsView() {
             <span className="text-xs font-mono text-slate-400">Auto-refresh: 15s</span>
           </div>
 
-          <FleetMap vehicles={liveFleet} drivers={liveDrivers} height="520px" />
+          <FleetMap vehicles={liveFleet} drivers={liveDrivers} height="min(52vh, 520px)" showCitySearch />
         </div>
       )}
 
@@ -387,7 +387,7 @@ export default function LogisticsView() {
             </div>
             <span className="text-xs text-slate-400">{vehicles.length} Vehicles</span>
           </div>
-          <div className="overflow-x-auto">
+          <div className="portal-table-scroll overflow-x-auto">
             <table className="w-full text-left text-xs min-w-[950px]">
               <thead className="bg-slate-50 text-slate-400 uppercase font-semibold border-b border-slate-200">
                 <tr>
@@ -526,7 +526,7 @@ export default function LogisticsView() {
                 <p className="text-slate-500">Fleet safety compliance is currently at 100% with zero open incident reports.</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="portal-table-scroll overflow-x-auto">
                 <table className="w-full text-left text-xs min-w-[900px]">
                   <thead className="bg-slate-50 text-slate-400 uppercase font-semibold border-b border-slate-200">
                     <tr>
@@ -734,7 +734,7 @@ export default function LogisticsView() {
       )}
 
       {shiftModalDriver && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="portal-modal-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <form onSubmit={handleSaveDriverShift} className="glass-panel p-6 rounded-2xl w-full max-w-md border border-slate-300 space-y-4 text-xs">
             <h3 className="text-base font-bold text-slate-900">Driver shift — {shiftModalDriver.full_name}</h3>
             <div>
@@ -759,7 +759,7 @@ export default function LogisticsView() {
 
       {/* Modal: Change Vehicle Shift */}
       {shiftModalVeh && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="portal-modal-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-panel p-6 rounded-2xl w-full max-w-md border border-slate-300 space-y-4">
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <Clock className="w-5 h-5 text-blue-400" /> Change Operational Shift: {shiftModalVeh.plate_number}
@@ -857,7 +857,7 @@ export default function LogisticsView() {
 
       {/* Modal: Change Operational Status */}
       {statusModalVeh && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="portal-modal-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-panel p-6 rounded-2xl w-full max-w-md border border-slate-300 space-y-4">
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <Sliders className="w-5 h-5 text-amber-700" /> Update Availability: {statusModalVeh.plate_number}
@@ -903,7 +903,7 @@ export default function LogisticsView() {
 
       {/* Modal: Reassign Vehicle Project */}
       {projectModalVeh && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="portal-modal-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-panel p-6 rounded-2xl w-full max-w-md border border-slate-300 space-y-4">
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <FolderKanban className="w-5 h-5 text-purple-400" /> Reassign Project: {projectModalVeh.plate_number}
@@ -946,7 +946,7 @@ export default function LogisticsView() {
 
       {/* Modal: Register Vehicle */}
       {showVehModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="portal-modal-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-panel p-6 rounded-2xl w-full max-w-md border border-slate-300 space-y-4">
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <Car className="w-5 h-5 text-blue-400" /> Register Vehicle
@@ -1088,7 +1088,7 @@ export default function LogisticsView() {
 
       {/* Modal: Record Expense */}
       {showExpModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="portal-modal-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-panel p-6 rounded-2xl w-full max-w-md border border-slate-300 space-y-4">
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <DollarSign className="w-5 h-5 text-emerald-600" /> Record Vehicle Expense

@@ -8,7 +8,7 @@ export default function MasterScopeBar() {
   return (
     <div className="space-y-2">
       {projects.length > 1 && (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-nowrap lg:flex-wrap items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-thin">
           <span className="text-xs font-semibold text-slate-500 flex items-center gap-1">
             <Globe className="w-3.5 h-3.5" /> Project
           </span>

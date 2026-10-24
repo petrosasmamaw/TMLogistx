@@ -1,0 +1,26 @@
+# Render Blueprint — set Root Directory to "server" in the dashboard if deploying from monorepo root.
+services:
+  - type: web
+    name: tmlogistx-api
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        sync: false
+      - key: CORS_ALLOW_NO_ORIGIN
+        value: "true"
+      - key: CORS_ALLOW_EXPO
+        value: "true"
+      - key: CORS_DEV_LAN
+        value: "false"
+      - key: PUBLIC_API_URL
+        sync: false

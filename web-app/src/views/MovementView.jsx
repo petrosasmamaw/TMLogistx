@@ -279,7 +279,7 @@ export default function MovementView() {
 
   if (activeTab === 'map') {
     return (
-      <div className="space-y-6">
+      <div className="portal-page">
         <AdminSectionHeader
           icon={Car}
           title="Live map"
@@ -317,7 +317,7 @@ export default function MovementView() {
             Loading map positions…
           </div>
         ) : (
-          <FleetMap vehicles={liveFleet} drivers={liveDrivers} height="min(72vh, 640px)" showCitySearch />
+          <FleetMap vehicles={liveFleet} drivers={liveDrivers} height="min(58vh, 640px)" showCitySearch />
         )}
         {!fleetLoading && liveFleet.length === 0 && liveDrivers.length === 0 && (
           <p className="text-xs text-slate-500 text-center">
@@ -330,7 +330,7 @@ export default function MovementView() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="portal-page">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="p-3 bg-emerald-500/20 border border-emerald-500/40 rounded-xl text-xs text-emerald-800 flex items-center gap-2 shadow-lg animate-bounce">
@@ -358,13 +358,13 @@ export default function MovementView() {
         {/* Left Column: Movement Requests Inbox (5 cols) */}
         <div className="lg:col-span-5 space-y-3">
           <div className="flex items-center justify-between text-xs text-slate-400 px-1">
-            <span className="font-bold text-slate-200 flex items-center gap-1.5">
+            <span className="font-bold text-slate-800 flex items-center gap-1.5">
               <Clock className="w-4 h-4 text-brand-600" /> Requests Inbox
             </span>
             <span>{filteredRequests.length} requests</span>
           </div>
 
-          <div className="space-y-2.5 max-h-[750px] overflow-y-auto pr-1">
+          <div className="space-y-2.5 portal-dispatch-inbox overflow-y-auto pr-1">
             {loading && requests.length === 0 ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="glass-panel p-4 rounded-2xl border border-slate-200 space-y-2">
@@ -764,7 +764,7 @@ export default function MovementView() {
       </div>
 
       {showAssignModal && selectedRequest && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="portal-modal-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-panel p-6 rounded-2xl w-full max-w-md border border-emerald-200 space-y-4">
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <Car className="w-5 h-5 text-emerald-600" /> Assign fleet to request
@@ -839,7 +839,7 @@ export default function MovementView() {
 
       {/* Modal: Coordinator Dispatches Uber / RIDE */}
       {showUberDispatchModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="portal-modal-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-panel p-6 rounded-2xl w-full max-w-md border border-amber-200 space-y-4">
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <Zap className="w-5 h-5 text-amber-700" /> Book & Dispatch External Taxi (Uber / RIDE)
@@ -955,7 +955,7 @@ export default function MovementView() {
 
       {/* Modal: Reassign Vehicle / Driver */}
       {showReassignModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="portal-modal-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-panel p-6 rounded-2xl w-full max-w-md border border-blue-500/40 space-y-4">
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <RotateCcw className="w-5 h-5 text-blue-400" /> Reassign Vehicle or Driver

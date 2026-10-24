@@ -8,10 +8,14 @@ import {
   Platform,
   ActivityIndicator
 } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { colors } from '../theme/colors';
+import { buildLeafletPickerHtml } from '../utils/leafletMapHtml';
+
+const MAP_HOST_ID = 'tmlogistx-map-picker-host';
 
 /**
- * Tap-to-pick map (Leaflet on web). Native falls back to confirm-at-center.
+ * Tap-to-pick map: Leaflet in WebView on iOS/Android, DOM Leaflet on web.
  */
 export default function MapLocationPicker({
   visible,
@@ -21,18 +25,19 @@ export default function MapLocationPicker({
   onConfirm,
   onClose
 }) {
-  const MAP_HOST_ID = 'tmlogistx-map-picker-host';
   const mapInstanceRef = useRef(null);
   const markerRef = useRef(null);
   const [picked, setPicked] = useState({ lat: initialLat, lng: initialLng });
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (!visible) return;
+    if (!visible) {
+      setReady(false);
+      return;
+    }
     setPicked({ lat: initialLat, lng: initialLng });
     if (Platform.OS !== 'web') {
-      setReady(true);
-      return undefined;
+      return;
     }
 
     let cancelled = false;
@@ -66,14 +71,13 @@ export default function MapLocationPicker({
         await loadScript('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js');
         if (cancelled) return;
 
-        const el = host;
         if (mapInstanceRef.current) {
           mapInstanceRef.current.remove();
           mapInstanceRef.current = null;
         }
 
         const L = window.L;
-        const map = L.map(el, { scrollWheelZoom: true }).setView([initialLat, initialLng], 14);
+        const map = L.map(host, { scrollWheelZoom: true }).setView([initialLat, initialLng], 14);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '© OpenStreetMap'
         }).addTo(map);
@@ -91,6 +95,7 @@ export default function MapLocationPicker({
         mapInstanceRef.current = map;
         markerRef.current = marker;
         setReady(true);
+        setTimeout(() => map.invalidateSize(), 150);
       } catch {
         setReady(true);
       }
@@ -112,6 +117,8 @@ export default function MapLocationPicker({
     onClose?.();
   };
 
+  const mapHtml = buildLeafletPickerHtml(initialLat, initialLng);
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
@@ -119,21 +126,42 @@ export default function MapLocationPicker({
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.hint}>Tap the map or drag the pin to set the point.</Text>
 
-          {Platform.OS === 'web' ? (
-            <View nativeID={MAP_HOST_ID} style={styles.mapHost} />
-          ) : (
-            <View style={styles.nativeFallback}>
-              <Text style={styles.nativeText}>
-                Map picker uses your project center. On device, enable web or enter address manually.
-              </Text>
-            </View>
-          )}
+          <View style={styles.mapWrap}>
+            {Platform.OS === 'web' ? (
+              <View nativeID={MAP_HOST_ID} style={styles.mapHost} />
+            ) : visible ? (
+              <WebView
+                key={`map-${initialLat}-${initialLng}`}
+                style={styles.mapHost}
+                originWhitelist={['*']}
+                javaScriptEnabled
+                domStorageEnabled
+                mixedContentMode="always"
+                allowsInlineMediaPlayback
+                setSupportMultipleWindows={false}
+                onLoadEnd={() => setReady(true)}
+                onError={() => setReady(true)}
+                onMessage={(event) => {
+                  try {
+                    const data = JSON.parse(event.nativeEvent.data);
+                    if (typeof data.lat === 'number' && typeof data.lng === 'number') {
+                      setPicked({ lat: data.lat, lng: data.lng });
+                    }
+                  } catch {
+                    /* ignore */
+                  }
+                }}
+                source={{ html: mapHtml, baseUrl: 'https://tmlogistx.local' }}
+              />
+            ) : null}
 
-          {!ready && (
-            <View style={styles.loading}>
-              <ActivityIndicator color={colors.amber} />
-            </View>
-          )}
+            {!ready && (
+              <View style={styles.loading}>
+                <ActivityIndicator color={colors.primary} size="large" />
+                <Text style={styles.loadingText}>Loading map…</Text>
+              </View>
+            )}
+          </View>
 
           <Text style={styles.coords}>
             {picked.lat.toFixed(5)}, {picked.lng.toFixed(5)}
@@ -164,7 +192,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 16,
-    maxHeight: '88%'
+    maxHeight: '92%'
   },
   title: {
     color: colors.textPrimary,
@@ -177,31 +205,30 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 10
   },
-  mapHost: {
-    height: 320,
+  mapWrap: {
+    position: 'relative',
+    height: 360,
     borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: colors.bgTertiary
   },
-  nativeFallback: {
-    height: 120,
-    borderRadius: 12,
-    backgroundColor: colors.bgTertiary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16
-  },
-  nativeText: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    textAlign: 'center'
+  mapHost: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.bgTertiary
   },
   loading: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 100,
-    alignItems: 'center'
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(248,250,252,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8
+  },
+  loadingText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600'
   },
   coords: {
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
@@ -230,11 +257,11 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 10,
-    backgroundColor: colors.amber,
+    backgroundColor: colors.primary,
     alignItems: 'center'
   },
   confirmText: {
-    color: '#000',
+    color: '#fff',
     fontWeight: '800'
   }
 });

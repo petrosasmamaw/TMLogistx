@@ -73,7 +73,7 @@ export const RequestRideScreen = ({ onNavigateToActive }) => {
   }, [refreshGpsPickup]);
 
   const mapDistancePreview = () => {
-    if (pickupSource !== 'map' || destSource !== 'map' || !pickupCoords || !destCoords) return '—';
+    if (destSource !== 'map' || !pickupCoords || !destCoords) return '—';
     const km = haversineKm(pickupCoords.lat, pickupCoords.lng, destCoords.lat, destCoords.lng);
     return km != null ? `${km} km` : '—';
   };

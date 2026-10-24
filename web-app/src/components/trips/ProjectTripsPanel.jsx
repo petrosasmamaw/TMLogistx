@@ -9,6 +9,7 @@ import {
   externalRideStatusLabel,
   isExternalRideRequest
 } from '../../utils/rideHelpers.js';
+import TripRequestCard from './TripRequestCard.jsx';
 
 export default function ProjectTripsPanel({ projectId }) {
   const [loading, setLoading] = useState(true);
@@ -91,7 +92,7 @@ export default function ProjectTripsPanel({ projectId }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
         <AdminStatCard
           icon={TrendingUp}
           label="All"
@@ -145,6 +146,14 @@ export default function ProjectTripsPanel({ projectId }) {
             Refresh
           </button>
         </div>
+        <div className="portal-mobile-only portal-data-cards">
+          {tableRows.length === 0 ? (
+            <p className="p-6 text-center text-slate-500 italic text-sm">No trips match this filter.</p>
+          ) : (
+            tableRows.map((r) => <TripRequestCard key={r.id} row={r} />)
+          )}
+        </div>
+        <div className="portal-table-scroll hidden lg:block">
         <table className="w-full text-left text-xs">
           <thead className="bg-slate-50 text-slate-500 uppercase font-semibold border-b">
             <tr>
@@ -182,6 +191,7 @@ export default function ProjectTripsPanel({ projectId }) {
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

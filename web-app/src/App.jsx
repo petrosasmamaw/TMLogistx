@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { bootstrapSession } from './store/slices/authSlice.js';
 import { PortalNavProvider } from './context/PortalNavContext.jsx';
-import Sidebar from './components/Sidebar.jsx';
+import PortalShell from './components/layout/PortalShell.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import AdminView from './views/AdminView.jsx';
 import MasterView from './views/MasterView.jsx';
@@ -55,19 +55,7 @@ export default function App() {
 
   return (
     <PortalNavProvider role={role} sessionKey={user?.id}>
-      <div className="min-h-screen bg-slate-50 text-slate-800 flex font-sans">
-        <Sidebar />
-
-        <div className="flex-1 flex flex-col min-w-0">
-          <main className="flex-1 app-portal px-6 py-6 lg:px-8 overflow-auto">
-            {renderRoleView()}
-          </main>
-
-          <footer className="border-t border-slate-200 bg-white py-3 px-6 text-xs text-slate-500">
-            TMLogistx © 2026 — Staff Movement & Fleet Management
-          </footer>
-        </div>
-      </div>
+      <PortalShell>{renderRoleView()}</PortalShell>
     </PortalNavProvider>
   );
 }

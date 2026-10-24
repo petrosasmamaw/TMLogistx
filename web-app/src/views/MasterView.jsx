@@ -5,9 +5,7 @@ import {
   Users,
   Car,
   DollarSign,
-  TrendingUp,
   Truck,
-  Navigation,
   AlertTriangle
 } from 'lucide-react';
 import { usePortalNav } from '../context/PortalNavContext.jsx';
@@ -17,12 +15,7 @@ import AdminSectionHeader from '../components/admin/AdminSectionHeader.jsx';
 import AdminStatCard from '../components/admin/AdminStatCard.jsx';
 import MasterScopeBar from '../components/master/MasterScopeBar.jsx';
 import MasterWorkersPanel from '../components/master/MasterWorkersPanel.jsx';
-import {
-  countExternalRidesForDashboard,
-  matchesExternalRideFilter,
-  externalRideStatusLabel,
-  isExternalRideRequest
-} from '../utils/rideHelpers.js';
+import ProjectTripsPanel from '../components/trips/ProjectTripsPanel.jsx';
 
 export default function MasterView() {
   const { section: activeTab } = usePortalNav();
@@ -36,8 +29,6 @@ export default function MasterView() {
   const [personalFuel, setPersonalFuel] = useState([]);
   const [expenseSummary, setExpenseSummary] = useState(null);
   const [accidents, setAccidents] = useState([]);
-
-  const [rideFilter, setRideFilter] = useState('ALL');
 
   const qs = scopeQuery ? `?${scopeQuery}` : '';
 
@@ -74,36 +65,11 @@ export default function MasterView() {
     }
   }, [scopeLoading, activeProjectId, loadData, activeTab]);
 
-  useEffect(() => {
-    setRideFilter('ALL');
-  }, [activeTab, activeProjectId]);
-
   const projectWorkers = users.filter((u) => u.role !== 'MASTER_PERSON' && u.role !== 'SYSTEM_ADMIN');
-
-  const filteredRides =
-    rideFilter === 'ALL'
-      ? requests
-      : rideFilter === 'EXTERNAL'
-        ? requests.filter(matchesExternalRideFilter)
-        : rideFilter === 'ACTIVE'
-          ? requests.filter((r) =>
-              ['ASSIGNED', 'IN_TRANSIT', 'EXTERNAL_AUTHORIZED', 'ACCEPTED'].includes(r.status)
-            )
-          : requests.filter((r) => r.status === rideFilter);
-
-  const rideStats = {
-    all: requests.length,
-    pending: requests.filter((r) => r.status === 'PENDING').length,
-    active: requests.filter((r) =>
-      ['ASSIGNED', 'IN_TRANSIT', 'EXTERNAL_AUTHORIZED', 'ACCEPTED'].includes(r.status)
-    ).length,
-    external: countExternalRidesForDashboard(requests),
-    completed: requests.filter((r) => r.status === 'COMPLETED').length
-  };
 
   if (scopeLoading) {
     return (
-      <div className="space-y-6">
+      <div className="portal-page">
         <StatCardsSkeleton count={4} />
         <TableSkeleton rows={6} cols={5} />
       </div>
@@ -112,7 +78,7 @@ export default function MasterView() {
 
   if (activeTab === 'workers') {
     return (
-      <div className="space-y-6">
+      <div className="portal-page">
         <MasterScopeBar />
         <MasterWorkersPanel />
       </div>
@@ -132,7 +98,7 @@ export default function MasterView() {
   const meta = sectionTitles[activeTab] || sectionTitles.overview;
 
   return (
-    <div className="space-y-6">
+    <div className="portal-page">
       <AdminSectionHeader
         icon={UserCheck}
         title={meta.title}
@@ -165,48 +131,7 @@ export default function MasterView() {
             </div>
           )}
 
-          {activeTab === 'rides' && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                <AdminStatCard icon={TrendingUp} label="All" value={rideStats.all} tone="brand" active={rideFilter === 'ALL'} onClick={() => setRideFilter('ALL')} />
-                <AdminStatCard icon={Car} label="Pending" value={rideStats.pending} tone="amber" active={rideFilter === 'PENDING'} onClick={() => setRideFilter('PENDING')} />
-                <AdminStatCard icon={Navigation} label="Active" value={rideStats.active} tone="blue" active={rideFilter === 'ACTIVE'} onClick={() => setRideFilter('ACTIVE')} />
-                <AdminStatCard icon={Navigation} label="Uber / RIDE" value={rideStats.external} tone="rose" active={rideFilter === 'EXTERNAL'} onClick={() => setRideFilter('EXTERNAL')} />
-                <AdminStatCard icon={Car} label="Completed" value={rideStats.completed} tone="emerald" active={rideFilter === 'COMPLETED'} onClick={() => setRideFilter('COMPLETED')} />
-              </div>
-              <div className="glass-panel rounded-2xl overflow-hidden border border-slate-200">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 text-slate-500 uppercase font-semibold border-b">
-                    <tr>
-                      <th className="p-3">Code</th>
-                      <th className="p-3">Staff</th>
-                      <th className="p-3">Destination</th>
-                      <th className="p-3">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {(rideFilter === 'ACTIVE'
-                      ? filteredRides.filter((r) =>
-                          ['ASSIGNED', 'IN_TRANSIT', 'EXTERNAL_AUTHORIZED', 'ACCEPTED'].includes(r.status)
-                        )
-                      : rideFilter === 'ALL'
-                        ? requests
-                        : filteredRides
-                    ).map((r) => (
-                      <tr key={r.id} className="hover:bg-slate-50">
-                        <td className="p-3 font-mono text-brand-600 font-bold">{r.request_code}</td>
-                        <td className="p-3">{r.staff?.full_name || '—'}</td>
-                        <td className="p-3 max-w-[200px] truncate">{r.destination_address}</td>
-                        <td className="p-3">
-                          {isExternalRideRequest(r) ? externalRideStatusLabel(r) : r.status}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+          {activeTab === 'rides' && <ProjectTripsPanel projectId={activeProjectId} />}
 
           {activeTab === 'fleet' && (
             <div className="space-y-4">
@@ -216,7 +141,8 @@ export default function MasterView() {
               </div>
               <div className="glass-panel rounded-2xl overflow-hidden border border-slate-200">
                 <div className="p-3 border-b text-sm font-bold">Vehicles</div>
-                <table className="w-full text-left text-xs">
+                <div className="portal-table-scroll overflow-x-auto lg:overflow-visible">
+                <table className="w-full text-left text-xs min-w-[320px]">
                   <thead className="bg-slate-50 uppercase text-slate-500">
                     <tr>
                       <th className="p-3">Plate</th>
@@ -234,6 +160,7 @@ export default function MasterView() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
             </div>
           )}

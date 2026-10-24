@@ -20,7 +20,14 @@ server.listen(config.port, () => {
   console.log('====================================================');
   console.log(`🚀 TMLogistx Central Server running on port ${config.port}`);
   console.log(`📡 Environment: ${config.nodeEnv}`);
-  console.log(`🌐 Base API URL: http://localhost:${config.port}/api`);
+  const base =
+    config.publicApiUrl ||
+    (config.isProduction ? 'https://tmlogistx.onrender.com' : `http://localhost:${config.port}`);
+  console.log(`🌐 API base: ${base.replace(/\/$/, '')}/api`);
+  console.log(
+    `🔒 CORS web origins: ${config.corsOrigins.length ? config.corsOrigins.join(', ') : '(none — set CORS_ORIGIN)'}`
+  );
+  console.log(`📱 CORS no-Origin (mobile app): ${config.corsAllowNoOrigin ? 'allowed' : 'blocked'}`);
   console.log(`⚡ WebSocket Server attached on port ${config.port}`);
   console.log('====================================================');
 });

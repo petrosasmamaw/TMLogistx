@@ -41,8 +41,15 @@ export function TableSkeleton({ rows = 6, cols = 6 }) {
 
 export function SessionLayoutSkeleton() {
   return (
-    <div className="min-h-screen bg-slate-50 flex">
-      <aside className="w-64 border-r border-slate-200 bg-white p-5 space-y-4 hidden md:block">
+    <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row">
+      <div className="lg:hidden border-b border-slate-200 bg-white px-4 py-3 flex items-center gap-3">
+        <Skeleton className="w-9 h-9 rounded-lg shrink-0" />
+        <div className="flex-1 space-y-2">
+          <Skeleton className="h-3 w-28" />
+          <Skeleton className="h-4 w-36" />
+        </div>
+      </div>
+      <aside className="w-64 border-r border-slate-200 bg-white p-5 space-y-4 hidden lg:block">
         <div className="flex items-center gap-3">
           <Skeleton className="w-10 h-10 rounded-lg" />
           <div className="flex-1 space-y-2">
@@ -54,7 +61,7 @@ export function SessionLayoutSkeleton() {
           <Skeleton key={i} className="h-9 w-full rounded-lg" />
         ))}
       </aside>
-      <main className="flex-1 p-6 lg:p-8 space-y-6">
+      <main className="flex-1 portal-main space-y-6">
         <div className="space-y-2">
           <Skeleton className="h-8 w-72 max-w-full" />
           <Skeleton className="h-4 w-96 max-w-full" />

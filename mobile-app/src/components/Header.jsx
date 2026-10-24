@@ -5,6 +5,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { colors } from '../theme/colors';
 import { useTranslation } from '../i18n';
 import { logoutUser } from '../store/authSlice';
+import BrandLogo from './BrandLogo';
 
 export const Header = () => {
   const dispatch = useDispatch();
@@ -14,9 +15,7 @@ export const Header = () => {
   return (
     <View style={styles.headerContainer}>
       <View style={styles.brandingSection}>
-        <View style={styles.logoBadge}>
-          <Ionicons name="bus" size={20} color="#fff" />
-        </View>
+        <BrandLogo size={38} />
         <View style={styles.brandText}>
           <Text style={styles.brandTitle}>{t('appTitle')}</Text>
           <Text style={styles.brandSubtitle} numberOfLines={1}>
@@ -65,14 +64,6 @@ const styles = StyleSheet.create({
   brandText: {
     flex: 1,
     minWidth: 0,
-  },
-  logoBadge: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   brandTitle: {
     color: colors.textPrimary,

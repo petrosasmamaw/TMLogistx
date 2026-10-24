@@ -1,4 +1,5 @@
 import { Server as SocketIOServer } from 'socket.io';
+import { buildSocketCorsOptions } from './utils/corsOptions.js';
 
 let ioInstance = null;
 
@@ -7,10 +8,7 @@ let ioInstance = null;
  */
 export function initSocket(server) {
   ioInstance = new SocketIOServer(server, {
-    cors: {
-      origin: '*',
-      methods: ['GET', 'POST']
-    }
+    cors: buildSocketCorsOptions()
   });
 
   ioInstance.on('connection', (socket) => {

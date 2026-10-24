@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1284 2778" role="img" aria-label="TMLogistx">
+  <defs>
+    <linearGradient id="tml-bg" x1="442" y1="1528" x2="842" y2="1128" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2563eb"/>
+      <stop offset="100%" stop-color="#6366f1"/>
+    </linearGradient>
+  </defs>
+  <rect width="1284" height="2778" fill="#0f172a"/>
+  <rect x="492" y="1189" width="300" height="300" rx="68" fill="url(#tml-bg)"/>
+  <g fill="none" stroke="#ffffff" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" transform="translate(526 1223) scale(10)">
+    <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/>
+    <path d="M15 18H9"/>
+    <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/>
+    <circle cx="17" cy="18" r="2" fill="#ffffff" stroke="none"/>
+    <circle cx="7" cy="18" r="2" fill="#ffffff" stroke="none"/>
+  </g>
+  <text x="642" y="1560" text-anchor="middle" fill="#f8fafc" font-family="Segoe UI, system-ui, sans-serif" font-size="72" font-weight="800" letter-spacing="-1">TMLogistx</text>
+  <text x="642" y="1635" text-anchor="middle" fill="#94a3b8" font-family="Segoe UI, system-ui, sans-serif" font-size="32" font-weight="600">Fleet &amp; Movement</text>
+</svg>

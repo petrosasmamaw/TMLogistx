@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="TMLogistx">
+  <rect width="1024" height="1024" rx="228" fill="#2563eb"/>
+  <path fill="#4f46e5" d="M0 0h1024v420L0 1024V0z" opacity="0.22"/>
+  <!-- Fleet truck mark (no transforms — safe for all SVG renderers) -->
+  <rect x="228" y="468" width="400" height="148" rx="32" fill="#ffffff"/>
+  <path fill="#ffffff" d="M588 468h148c28 0 52 22 52 50v98H588V468z"/>
+  <rect x="612" y="500" width="88" height="72" rx="12" fill="#dbeafe"/>
+  <circle cx="332" cy="648" r="52" fill="#ffffff"/>
+  <circle cx="332" cy="648" r="26" fill="#2563eb"/>
+  <circle cx="652" cy="648" r="52" fill="#ffffff"/>
+  <circle cx="652" cy="648" r="26" fill="#2563eb"/>
+</svg>

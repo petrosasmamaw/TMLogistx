@@ -283,10 +283,10 @@ export default function MasterWorkersPanel() {
       )}
 
       {showWorkerModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="portal-modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <form
             onSubmit={handleCreateWorker}
-            className="bg-white rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto space-y-3 shadow-xl border border-slate-200"
+            className="portal-modal-panel bg-white rounded-2xl p-5 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto space-y-3 shadow-xl border border-slate-200"
           >
             <h3 className="text-lg font-bold text-slate-900">Register worker</h3>
             <label className="block text-xs font-semibold text-slate-600">
@@ -373,10 +373,10 @@ export default function MasterWorkersPanel() {
       )}
 
       {editingWorker && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="portal-modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <form
             onSubmit={handleSaveEdit}
-            className="bg-white rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto space-y-3 shadow-xl border border-slate-200"
+            className="portal-modal-panel bg-white rounded-2xl p-5 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto space-y-3 shadow-xl border border-slate-200"
           >
             <h3 className="text-lg font-bold text-slate-900">Edit worker</h3>
             <p className="text-xs text-slate-500 font-mono">{editingWorker.email}</p>

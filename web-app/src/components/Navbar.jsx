@@ -1,7 +1,8 @@
 import React from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { loginUser, logout, DEMO_CREDENTIALS } from '../store/slices/authSlice.js';
-import { Shield, Truck, Compass, UserCheck, LogOut, ChevronRight, MapPin, Globe } from 'lucide-react';
+import { Shield, Truck, Compass, UserCheck, LogOut, MapPin, Globe } from 'lucide-react';
+import BrandMark from './BrandMark.jsx';
 
 export default function Navbar() {
   const dispatch = useDispatch();
@@ -60,9 +61,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* Brand Logo */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-brand-500/20">
-            <Truck className="w-5 h-5" />
-          </div>
+          <BrandMark size="md" className="rounded-xl" />
           <div>
             <div className="flex items-center gap-2">
               <span className="font-extrabold text-lg tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">

@@ -24,8 +24,13 @@ import policyRoutes from './routes/policyRoutes.js';
 import personalFuelRoutes from './routes/personalFuelRoutes.js';
 import siteRoutes from './routes/siteRoutes.js';
 import db from './db/connection.js';
+import { buildExpressCorsOptions } from './utils/corsOptions.js';
 
 const app = express();
+
+if (config.isProduction) {
+  app.set('trust proxy', 1);
+}
 
 app.use(async (req, res, next) => {
   try {
@@ -37,15 +42,12 @@ app.use(async (req, res, next) => {
 });
 
 // Security and utility middleware
-app.use(helmet());
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl)
-    if (!origin) return callback(null, true);
-    return callback(null, true);
-  },
-  credentials: true
-}));
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' }
+  })
+);
+app.use(cors(buildExpressCorsOptions()));
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -78,7 +80,12 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
     currency: config.defaultCurrency,
     rolesSupported: ['SYSTEM_ADMIN', 'MASTER_PERSON', 'LOGISTICS_COORDINATOR', 'MOVEMENT_CENTER', 'MOVEMENT_OFFICER', 'STAFF', 'DRIVER'],
-    persistence: db.isLiveDb() ? 'neon-postgres' : 'local-file'
+    persistence: db.isLiveDb() ? 'neon-postgres' : 'local-file',
+    cors: {
+      allowNoOrigin: config.corsAllowNoOrigin,
+      allowedOrigins: config.corsOrigins,
+      production: config.isProduction
+    }
   });
 });
 

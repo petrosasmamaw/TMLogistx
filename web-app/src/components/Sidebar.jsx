@@ -4,7 +4,8 @@ import { logout } from '../store/slices/authSlice.js';
 import { usePortalNav } from '../context/PortalNavContext.jsx';
 import { getPortalNavItems } from '../constants/portalNav.js';
 import { roleLabel } from '../constants/roles.js';
-import { Truck, LogOut, LayoutDashboard } from 'lucide-react';
+import { LogOut, LayoutDashboard } from 'lucide-react';
+import BrandMark from './BrandMark.jsx';
 
 export default function Sidebar() {
   const dispatch = useDispatch();
@@ -14,12 +15,10 @@ export default function Sidebar() {
   const accountRole = roleLabel(role || user?.role);
 
   return (
-    <aside className="w-64 shrink-0 flex flex-col bg-white border-r border-slate-200 min-h-screen">
+    <aside className="hidden lg:flex w-64 shrink-0 flex-col bg-white border-r border-slate-200 min-h-screen">
       <div className="p-5 border-b border-slate-200">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-brand-600 flex items-center justify-center text-white">
-            <Truck className="w-5 h-5" />
-          </div>
+          <BrandMark size="md" />
           <div>
             <p className="text-sm font-bold text-brand-700 leading-tight">TMLogistx</p>
             <p className="text-[11px] text-slate-500 font-medium">Fleet & Movement</p>

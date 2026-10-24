@@ -397,7 +397,7 @@ export default function MasterSitesPanel() {
       </div>
 
       {showSiteModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+        <div className="portal-modal-backdrop fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <form onSubmit={handleCreateSite} className="glass-panel p-5 rounded-2xl w-full max-w-md space-y-3 text-xs">
             <h3 className="font-bold text-slate-900">Create site / city</h3>
             <input
@@ -424,7 +424,7 @@ export default function MasterSitesPanel() {
       )}
 
       {showWorkerModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div className="portal-modal-backdrop fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="glass-panel p-5 rounded-2xl w-full max-w-lg my-8 text-xs space-y-3">
             <div className="flex gap-2">
               <button
@@ -513,7 +513,7 @@ export default function MasterSitesPanel() {
       )}
 
       {assignModalSite && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+        <div className="portal-modal-backdrop fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <form onSubmit={saveLeads} className="glass-panel p-5 rounded-2xl w-full max-w-md space-y-3 text-xs">
             <h3 className="font-bold text-slate-900">Assign site leads — {assignModalSite.name}</h3>
             <p className="text-slate-500">Pick coordinator only, movement officer only, or both (two people).</p>
