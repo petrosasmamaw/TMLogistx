@@ -1,14 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../store/slices/authSlice.js';
 import { usePortalNav } from '../context/PortalNavContext.jsx';
 import { getPortalNavItems } from '../constants/portalNav.js';
 import { roleLabel } from '../constants/roles.js';
-import { LogOut, LayoutDashboard } from 'lucide-react';
+import { LogOut, LayoutDashboard, KeyRound } from 'lucide-react';
 import BrandMark from './BrandMark.jsx';
+import AccountSheet from './account/AccountSheet.jsx';
 
 export default function Sidebar() {
   const dispatch = useDispatch();
+  const [accountOpen, setAccountOpen] = useState(false);
   const { user, role } = useSelector((state) => state.auth);
   const { section, setSection } = usePortalNav();
   const navItems = getPortalNavItems(role);
@@ -63,6 +65,14 @@ export default function Sidebar() {
         </div>
         <button
           type="button"
+          onClick={() => setAccountOpen(true)}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-brand-700 border border-brand-200 bg-brand-50 hover:bg-brand-100"
+        >
+          <KeyRound className="w-4 h-4" />
+          Account & password
+        </button>
+        <button
+          type="button"
           onClick={() => dispatch(logout())}
           className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-600 border border-slate-200 hover:bg-slate-50"
         >
@@ -70,6 +80,7 @@ export default function Sidebar() {
           Sign out
         </button>
       </div>
+      <AccountSheet open={accountOpen} onClose={() => setAccountOpen(false)} user={user} />
     </aside>
   );
 }

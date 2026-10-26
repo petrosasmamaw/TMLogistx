@@ -1,33 +1,26 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { colors } from '../theme/colors';
-import { useTranslation } from '../i18n';
-
 const PIPELINE_STAGES = [
-  { key: 'ASSIGNED', index: 1, labelEn: 'Assigned', labelAm: 'ተመድቧል' },
-  { key: 'HEADING_TO_PICKUP', index: 2, labelEn: 'En Route', labelAm: 'በመንገድ ላይ' },
-  { key: 'ARRIVED', index: 3, labelEn: 'Arrived', labelAm: 'ደርሷል' },
-  { key: 'IN_TRANSIT', index: 4, labelEn: 'In Transit', labelAm: 'ጉዞ ላይ' },
-  { key: 'COMPLETED', index: 5, labelEn: 'Complete', labelAm: 'ተጠናቋል' },
+  { index: 1, label: 'Requested' },
+  { index: 2, label: 'Accepted' },
+  { index: 3, label: 'Arrived' },
+  { index: 4, label: 'Started' },
+  { index: 5, label: 'Ended' },
 ];
 
+export function staffTripStageIndex(status) {
+  const s = String(status || 'PENDING').toUpperCase();
+  if (s === 'COMPLETED') return 5;
+  if (s === 'IN_TRANSIT' || s === 'PASSENGER_PICKED_UP') return 4;
+  if (s === 'ARRIVED') return 3;
+  if (['ACCEPTED', 'ASSIGNED', 'HEADING_TO_PICKUP'].includes(s)) return 2;
+  if (s === 'PENDING' || s === 'EXTERNAL_AUTHORIZED') return 1;
+  return 1;
+}
+
 export const TripPipelineStepper = ({ currentStatus }) => {
-  const { language } = useTranslation();
-
-  const getStageIndex = (status) => {
-    switch (status) {
-      case 'COMPLETED': return 5;
-      case 'IN_TRANSIT':
-      case 'PASSENGER_PICKED_UP': return 4;
-      case 'ARRIVED': return 3;
-      case 'HEADING_TO_PICKUP': return 2;
-      case 'ACCEPTED':
-      case 'ASSIGNED': return 1;
-      default: return 0;
-    }
-  };
-
-  const currentIndex = getStageIndex(currentStatus);
+  const currentIndex = staffTripStageIndex(currentStatus);
 
   return (
     <View style={styles.container}>
@@ -44,10 +37,10 @@ export const TripPipelineStepper = ({ currentStatus }) => {
         {PIPELINE_STAGES.map((stage) => {
           const isDone = currentIndex > stage.index;
           const isActive = currentIndex === stage.index;
-          const label = language === 'am' ? stage.labelAm : stage.labelEn;
+          const label = stage.label;
 
           return (
-            <View key={stage.key} style={styles.stepItem}>
+            <View key={stage.index} style={styles.stepItem}>
               <View
                 style={[
                   styles.stepNode,
@@ -61,7 +54,7 @@ export const TripPipelineStepper = ({ currentStatus }) => {
                     (isDone || isActive) && styles.stepNodeTextActive,
                   ]}
                 >
-                  {isDone ? '✓' : stage.index}
+                  {isDone ? 'OK' : stage.index}
                 </Text>
               </View>
               <Text

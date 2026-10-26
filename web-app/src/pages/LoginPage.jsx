@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ForgotPasswordPage from './ForgotPasswordPage.jsx';
 import { useDispatch, useSelector } from 'react-redux';
 import { loginUser, clearAuthError } from '../store/slices/authSlice.js';
 import BrandMark from '../components/BrandMark.jsx';
@@ -11,6 +12,11 @@ export default function LoginPage() {
   const { loading, error } = useSelector((state) => state.auth);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [view, setView] = useState('login');
+
+  if (view === 'forgot') {
+    return <ForgotPasswordPage onBack={() => setView('login')} />;
+  }
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -64,6 +70,16 @@ export default function LoginPage() {
               inputClassName={fieldInput}
               placeholder="••••••••••••"
             />
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setView('forgot')}
+              className="text-xs font-semibold text-brand-600 hover:text-brand-700"
+            >
+              Forgot password?
+            </button>
           </div>
 
           <LoadingButton

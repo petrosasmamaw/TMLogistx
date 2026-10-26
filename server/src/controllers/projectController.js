@@ -1,7 +1,36 @@
 import { v4 as uuidv4 } from 'uuid';
-import { getStore } from '../db/connection.js';
+import { getStore, queueStoreSave } from '../db/connection.js';
 import { logAudit } from '../middleware/audit.js';
 import { cascadeCloseProject } from '../utils/cascadeClose.js';
+
+function enrichProject(store, proj) {
+  const country = store.countries.find((c) => c.id === proj.country_id);
+  const vehicleCount = store.vehicles.filter((v) => v.project_id === proj.id).length;
+  const driverCount = store.drivers.filter((d) => d.project_id === proj.id).length;
+
+  const masterAssignments =
+    store.master_person_projects?.filter((m) => m.project_id === proj.id).map((m) => m.user_id) || [];
+
+  const masterPersons = store.users
+    .filter(
+      (u) =>
+        (u.project_id === proj.id && u.role === 'MASTER_PERSON') || masterAssignments.includes(u.id)
+    )
+    .map((u) => ({ id: u.id, full_name: u.full_name, email: u.email }));
+
+  const sites = (store.project_sites || [])
+    .filter((s) => s.project_id === proj.id && s.is_active !== false)
+    .sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+
+  return {
+    ...proj,
+    country: country ? { id: country.id, name: country.name, code: country.code } : null,
+    vehicleCount,
+    driverCount,
+    masterPersons,
+    sites
+  };
+}
 
 export async function getProjects(req, res, next) {
   try {
@@ -21,35 +50,7 @@ export async function getProjects(req, res, next) {
       projects = store.projects.filter(p => p.id === req.user.projectId);
     }
 
-    // Enrich with country details, vehicle count, driver count, and assigned Master Person
-    const enriched = projects.map(proj => {
-      const country = store.countries.find(c => c.id === proj.country_id);
-      const vehicleCount = store.vehicles.filter(v => v.project_id === proj.id).length;
-      const driverCount = store.drivers.filter(d => d.project_id === proj.id).length;
-      
-      // Find Master Persons assigned to this project
-      const masterAssignments = store.master_person_projects
-        ?.filter(m => m.project_id === proj.id)
-        .map(m => m.user_id) || [];
-      
-      const masterPersons = store.users.filter(u => 
-        (u.project_id === proj.id && u.role === 'MASTER_PERSON') || 
-        masterAssignments.includes(u.id)
-      ).map(u => ({ id: u.id, full_name: u.full_name, email: u.email }));
-
-      const sites = (store.project_sites || [])
-        .filter((s) => s.project_id === proj.id && s.is_active !== false)
-        .sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
-
-      return {
-        ...proj,
-        country: country ? { id: country.id, name: country.name, code: country.code } : null,
-        vehicleCount,
-        driverCount,
-        masterPersons,
-        sites
-      };
-    });
+    const enriched = projects.map((proj) => enrichProject(store, proj));
 
     res.json({ success: true, count: enriched.length, data: enriched });
   } catch (err) {
@@ -117,6 +118,8 @@ export async function createProject(req, res, next) {
       }
     }
 
+    queueStoreSave();
+
     await logAudit({
       userId: req.user.userId,
       action: 'PROJECT_CREATED',
@@ -127,7 +130,11 @@ export async function createProject(req, res, next) {
       ipAddress: req.ip || '127.0.0.1'
     });
 
-    res.status(201).json({ success: true, message: 'Project created successfully', data: newProject });
+    res.status(201).json({
+      success: true,
+      message: 'Project created successfully',
+      data: enrichProject(store, newProject)
+    });
   } catch (err) {
     next(err);
   }
@@ -199,6 +206,8 @@ export async function updateProject(req, res, next) {
     }
     project.updated_at = new Date();
 
+    queueStoreSave();
+
     await logAudit({
       userId: req.user.userId,
       action: 'PROJECT_UPDATED',
@@ -210,7 +219,7 @@ export async function updateProject(req, res, next) {
       ipAddress: req.ip || '127.0.0.1'
     });
 
-    res.json({ success: true, message: 'Project updated successfully', data: project });
+    res.json({ success: true, message: 'Project updated successfully', data: enrichProject(store, project) });
   } catch (err) {
     next(err);
   }
@@ -254,6 +263,12 @@ export async function assignMasterPerson(req, res, next) {
       user.project_id = projectId;
     }
 
+    queueStoreSave();
+
+    const master_project_ids = (store.master_person_projects || [])
+      .filter((m) => m.user_id === user_id)
+      .map((m) => m.project_id);
+
     await logAudit({
       userId: req.user.userId,
       action: 'MASTER_PERSON_ASSIGNED',
@@ -264,7 +279,18 @@ export async function assignMasterPerson(req, res, next) {
       ipAddress: req.ip || '127.0.0.1'
     });
 
-    res.json({ success: true, message: `Master Person '${user.full_name}' assigned to project '${project.name}'` });
+    res.json({
+      success: true,
+      message: `Master Person '${user.full_name}' assigned to project '${project.name}'`,
+      data: {
+        project: enrichProject(store, project),
+        user: {
+          id: user.id,
+          project_id: user.project_id,
+          master_project_ids
+        }
+      }
+    });
   } catch (err) {
     next(err);
   }

@@ -21,8 +21,7 @@
         "EXPO_PUBLIC_SOCKET_URL": "https://tmlogistx.onrender.com",
         "EXPO_PUBLIC_APP_NAME": "TMLogistx Mobile",
         "EXPO_PUBLIC_DEFAULT_LANGUAGE": "en",
-        "EXPO_PUBLIC_GPS_UPDATE_INTERVAL_MS": "10000",
-        "EXPO_PUBLIC_GEOAPIFY_API_KEY": "61c689f487934d369f1b58ee421ef8d3"
+        "EXPO_PUBLIC_GPS_UPDATE_INTERVAL_MS": "10000"
       }
     },
     "production": {
@@ -32,8 +31,7 @@
       },
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://tmlogistx.onrender.com/api",
-        "EXPO_PUBLIC_SOCKET_URL": "https://tmlogistx.onrender.com",
-        "EXPO_PUBLIC_GEOAPIFY_API_KEY": "61c689f487934d369f1b58ee421ef8d3"
+        "EXPO_PUBLIC_SOCKET_URL": "https://tmlogistx.onrender.com"
       }
     }
   },

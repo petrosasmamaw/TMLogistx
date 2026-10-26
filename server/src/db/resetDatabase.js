@@ -11,8 +11,8 @@ import { fileURLToPath } from 'url';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
-import { saveSnapshotToPg } from './pgStoreSnapshot.js';
-import { persistStoreNow, getStoreFilePath } from './persistStore.js';
+import { saveSnapshotToPg, loadSnapshotFromPg } from './pgStoreSnapshot.js';
+import { persistStoreNow, getStoreFilePath, loadPersistedStore } from './persistStore.js';
 
 dotenv.config();
 
@@ -45,15 +45,47 @@ const TABLES_TO_TRUNCATE = [
   'app_store_snapshots'
 ];
 
-async function buildFreshStore() {
-  const password_hash = await bcrypt.hash(ADMIN_PASSWORD, 10);
-  const now = new Date().toISOString();
+async function loadCurrentStoreForPreserve() {
+  let store = loadPersistedStore();
+  const DATABASE_URL = process.env.DATABASE_URL;
+  if (DATABASE_URL && !DATABASE_URL.includes('YOUR_PASSWORD')) {
+    const pool = new pg.Pool({
+      connectionString: DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+      max: 2
+    });
+    try {
+      const fromPg = await loadSnapshotFromPg(pool);
+      if (fromPg) store = fromPg;
+    } finally {
+      await pool.end();
+    }
+  }
+  return store;
+}
 
-  return {
-    countries: [],
-    projects: [],
-    project_sites: [],
-    users: [
+function cloneSuperAdmins(store) {
+  const now = new Date().toISOString();
+  return (store?.users || [])
+    .filter((u) => u.role === 'SYSTEM_ADMIN' && u.is_active !== false)
+    .map((u) => ({
+      ...u,
+      country_id: null,
+      project_id: null,
+      site_id: null,
+      master_active_project_id: null,
+      master_active_site_id: null,
+      updated_at: now
+    }));
+}
+
+async function buildFreshStore(preservedAdmins = null) {
+  const now = new Date().toISOString();
+  let users = preservedAdmins;
+
+  if (!users?.length) {
+    const password_hash = await bcrypt.hash(ADMIN_PASSWORD, 10);
+    users = [
       {
         id: 'usr-super-admin',
         email: ADMIN_EMAIL,
@@ -69,7 +101,14 @@ async function buildFreshStore() {
         created_at: now,
         updated_at: now
       }
-    ],
+    ];
+  }
+
+  return {
+    countries: [],
+    projects: [],
+    project_sites: [],
+    users,
     master_person_projects: [],
     vehicles: [],
     drivers: [],
@@ -105,7 +144,18 @@ async function truncateRelationalTables(client) {
 
 async function run() {
   const DATABASE_URL = process.env.DATABASE_URL;
-  const freshStore = await buildFreshStore();
+  const preserve = process.env.PRESERVE_SUPER_ADMIN !== 'false';
+  let preserved = null;
+  if (preserve) {
+    const current = await loadCurrentStoreForPreserve();
+    preserved = cloneSuperAdmins(current);
+    if (preserved.length) {
+      console.log(
+        `[db:reset] Preserving ${preserved.length} SYSTEM_ADMIN account(s): ${preserved.map((u) => u.email).join(', ')}`
+      );
+    }
+  }
+  const freshStore = await buildFreshStore(preserved?.length ? preserved : null);
 
   console.log('====================================================');
   console.log('TMLogistx — FULL DATABASE RESET');
@@ -143,8 +193,13 @@ async function run() {
 
   console.log('');
   console.log('Done. All previous data removed.');
-  console.log(`Super admin: ${ADMIN_EMAIL}`);
-  console.log(`Password:    ${ADMIN_PASSWORD}`);
+  const admin = freshStore.users[0];
+  console.log(`Super admin: ${admin?.email || ADMIN_EMAIL}`);
+  if (!preserved?.length) {
+    console.log(`Password:    ${ADMIN_PASSWORD}`);
+  } else {
+    console.log('Password:    unchanged (existing super admin kept)');
+  }
   console.log('Restart the API server (npm run dev), then sign in on the web portal.');
 }
 

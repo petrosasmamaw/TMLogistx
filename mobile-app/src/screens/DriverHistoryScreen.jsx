@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { useSelector } from 'react-redux';
+import { ListSkeleton, StatsGridSkeleton } from '../components/Skeleton';
 import { colors } from '../theme/colors';
 import { useTranslation } from '../i18n';
 import StatusBadge from '../components/StatusBadge';
@@ -17,6 +19,7 @@ const emptyStats = {
 
 export const DriverHistoryScreen = () => {
   const { t } = useTranslation();
+  const driverStatsBump = useSelector((state) => state.trips.driverStatsBump);
   const [stats, setStats] = useState(emptyStats);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -40,6 +43,10 @@ export const DriverHistoryScreen = () => {
     return () => clearInterval(poll);
   }, [loadStats]);
 
+  useEffect(() => {
+    if (driverStatsBump > 0) loadStats();
+  }, [driverStatsBump, loadStats]);
+
   const completedTrips = stats.completed_movements || [];
   const vehicle = stats.vehicle;
   const vehicleTitle = vehicle ? `${vehicle.make} ${vehicle.model}`.trim() : null;
@@ -55,12 +62,12 @@ export const DriverHistoryScreen = () => {
         <Text style={styles.subtitle}>Daily Driver Telematics & Fulfilled Movements</Text>
       </View>
 
-      {loading && (
-        <View style={styles.loadingRow}>
-          <ActivityIndicator color={colors.primary} />
-          <Text style={styles.loadingText}>Loading your stats…</Text>
-        </View>
-      )}
+      {loading ? (
+        <>
+          <StatsGridSkeleton />
+          <ListSkeleton rows={3} />
+        </>
+      ) : null}
 
       {error && !loading ? (
         <View style={styles.errorCard}>
@@ -68,7 +75,7 @@ export const DriverHistoryScreen = () => {
         </View>
       ) : null}
 
-      <View style={styles.kpiGrid}>
+      {!loading && <View style={styles.kpiGrid}>
         <View style={styles.kpiCard}>
           <Text style={styles.kpiVal}>{stats.trips_completed}</Text>
           <Text style={styles.kpiLabel}>TRIPS COMPLETED</Text>
@@ -85,9 +92,9 @@ export const DriverHistoryScreen = () => {
           <Text style={[styles.kpiVal, { color: colors.amber }]}>{ratingDisplay}</Text>
           <Text style={styles.kpiLabel}>STAFF RATING</Text>
         </View>
-      </View>
+      </View>}
 
-      <View style={styles.vehicleSpecsCard}>
+      {!loading && <View style={styles.vehicleSpecsCard}>
         <Text style={styles.specsTitle}>ACTIVE FLEET VEHICLE</Text>
         <View style={styles.specsRow}>
           <View>
@@ -108,10 +115,10 @@ export const DriverHistoryScreen = () => {
             </View>
           ) : null}
         </View>
-      </View>
+      </View>}
 
-      <Text style={styles.logSectionTitle}>COMPLETED MOVEMENTS LOG</Text>
-      <View style={styles.logList}>
+      {!loading && <Text style={styles.logSectionTitle}>COMPLETED MOVEMENTS LOG</Text>}
+      {!loading && <View style={styles.logList}>
         {!loading && completedTrips.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyText}>{t('noHistory')}</Text>
@@ -148,7 +155,7 @@ export const DriverHistoryScreen = () => {
             </View>
           ))
         )}
-      </View>
+      </View>}
     </ScrollView>
   );
 };

@@ -5,12 +5,13 @@ const gpsSlice = createSlice({
   name: 'gps',
   initialState: {
     currentLocation: {
-      latitude: 8.9950,
-      longitude: 38.7800,
-      accuracy: 5.0,
-      speedKmh: 45,
-      heading: 142
+      latitude: null,
+      longitude: null,
+      accuracy: null,
+      speedKmh: 0,
+      heading: 0
     },
+    hasLiveFix: false,
     isBroadcasting: true,
     lastPingTimestamp: Date.now(),
     history: [],
@@ -32,6 +33,9 @@ const gpsSlice = createSlice({
   reducers: {
     updateLocation: (state, action) => {
       state.currentLocation = { ...state.currentLocation, ...action.payload };
+      if (action.payload?.latitude != null && action.payload?.longitude != null) {
+        state.hasLiveFix = true;
+      }
       state.lastPingTimestamp = Date.now();
       state.history.push({ ...state.currentLocation, timestamp: Date.now() });
       if (state.history.length > 30) state.history.shift();

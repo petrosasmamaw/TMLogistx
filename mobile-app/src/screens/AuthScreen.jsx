@@ -17,14 +17,36 @@ import { useTranslation } from '../i18n';
 import { Ionicons } from '@expo/vector-icons';
 import LoadingButton from '../components/LoadingButton';
 import BrandLogo from '../components/BrandLogo';
+import ForgotPasswordScreen from './ForgotPasswordScreen';
+import ResetPasswordScreen from './ResetPasswordScreen';
 
-export const AuthScreen = () => {
+export const AuthScreen = ({ resetToken, onResetDone }) => {
   const dispatch = useDispatch();
-  const { t, language, toggleLanguage } = useTranslation();
+  const { t } = useTranslation();
   const { loading, error } = useSelector((state) => state.auth);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [view, setView] = useState(resetToken ? 'reset' : 'login');
+
+  if (view === 'forgot') {
+    return (
+      <View style={styles.container}>
+        <ForgotPasswordScreen onBack={() => setView('login')} />
+      </View>
+    );
+  }
+
+  if (view === 'reset' && resetToken) {
+    return (
+      <View style={styles.container}>
+        <ResetPasswordScreen token={resetToken} onDone={() => {
+          setView('login');
+          onResetDone?.();
+        }} />
+      </View>
+    );
+  }
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -41,17 +63,6 @@ export const AuthScreen = () => {
       style={styles.container}
     >
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.topBar}>
-          <TouchableOpacity style={styles.langToggle} onPress={toggleLanguage} disabled={loading}>
-            <View style={styles.langRow}>
-              <Ionicons name="language-outline" size={14} color={colors.primary} />
-              <Text style={styles.langToggleText}>
-                {language === 'en' ? 'አማርኛ' : 'English'}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-
         <View style={styles.heroSection}>
           <BrandLogo size={64} style={styles.logoBadge} />
           <Text style={styles.appTitle}>{t('appTitle')}</Text>
@@ -104,6 +115,10 @@ export const AuthScreen = () => {
               <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color={colors.textMuted} />
             </TouchableOpacity>
           </View>
+
+          <TouchableOpacity onPress={() => setView('forgot')} disabled={loading} style={styles.forgotLink}>
+            <Text style={styles.forgotText}>Forgot password?</Text>
+          </TouchableOpacity>
 
           <LoadingButton
             onPress={handleLogin}
@@ -232,6 +247,16 @@ const styles = StyleSheet.create({
     right: 8,
     top: 8,
     padding: 4,
+  },
+  forgotLink: {
+    alignSelf: 'flex-end',
+    marginTop: 4,
+    marginBottom: 4
+  },
+  forgotText: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '700'
   },
   loginBtn: {
     marginTop: 14,

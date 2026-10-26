@@ -32,8 +32,18 @@ export const assignMasterPerson = createAsyncThunk('project/assignMasterPerson',
     method: 'POST',
     body: { user_id: userId }
   });
-  return res;
+  return res.data;
 });
+
+function upsertProjectInState(state, project) {
+  if (!project?.id) return;
+  const idx = state.projects.findIndex((p) => p.id === project.id);
+  if (idx >= 0) {
+    state.projects[idx] = { ...state.projects[idx], ...project };
+  } else {
+    state.projects.push(project);
+  }
+}
 
 export const updateProjectStatus = createAsyncThunk(
   'project/updateProjectStatus',
@@ -59,7 +69,12 @@ const projectSlice = createSlice({
     saving: false,
     error: null
   },
-  reducers: {},
+  reducers: {
+    mergeProject(state, action) {
+      state.saving = false;
+      upsertProjectInState(state, action.payload);
+    }
+  },
   extraReducers: (builder) => {
     builder
       .addCase(fetchCountries.pending, (state) => {
@@ -97,8 +112,7 @@ const projectSlice = createSlice({
       })
       .addCase(createProject.fulfilled, (state, action) => {
         state.saving = false;
-        const exists = state.projects.some((p) => p.id === action.payload.id);
-        if (!exists) state.projects.push(action.payload);
+        upsertProjectInState(state, action.payload);
       })
       .addCase(createProject.rejected, (state) => {
         state.saving = false;
@@ -106,8 +120,11 @@ const projectSlice = createSlice({
       .addCase(assignMasterPerson.pending, (state) => {
         state.saving = true;
       })
-      .addCase(assignMasterPerson.fulfilled, (state) => {
+      .addCase(assignMasterPerson.fulfilled, (state, action) => {
         state.saving = false;
+        if (action.payload?.project) {
+          upsertProjectInState(state, action.payload.project);
+        }
       })
       .addCase(assignMasterPerson.rejected, (state) => {
         state.saving = false;
@@ -117,12 +134,7 @@ const projectSlice = createSlice({
       })
       .addCase(updateProjectStatus.fulfilled, (state, action) => {
         state.saving = false;
-        const updated = action.payload;
-        if (!updated?.id) return;
-        const idx = state.projects.findIndex((p) => p.id === updated.id);
-        if (idx >= 0) {
-          state.projects[idx] = { ...state.projects[idx], ...updated, is_active: updated.is_active };
-        }
+        upsertProjectInState(state, action.payload);
       })
       .addCase(updateProjectStatus.rejected, (state, action) => {
         state.saving = false;
@@ -131,4 +143,5 @@ const projectSlice = createSlice({
   }
 });
 
+export const { mergeProject } = projectSlice.actions;
 export default projectSlice.reducer;

@@ -40,12 +40,11 @@ async function upsertProjects(client, projects = []) {
   for (const p of projects) {
     if (!p.country_id) continue;
     await client.query(
-      `INSERT INTO projects (id, country_id, name, code, description, allow_vehicle_sharing, is_active, created_at, city)
-       VALUES ($1,$2,$3,$4,$5,COALESCE($6,false),COALESCE($7,true),COALESCE($8::timestamptz,NOW()),$9)
+      `INSERT INTO projects (id, country_id, name, code, description, allow_vehicle_sharing, is_active, created_at)
+       VALUES ($1,$2,$3,$4,$5,COALESCE($6,false),COALESCE($7,true),COALESCE($8::timestamptz,NOW()))
        ON CONFLICT (id) DO UPDATE SET
          name = EXCLUDED.name, code = EXCLUDED.code, description = EXCLUDED.description,
          allow_vehicle_sharing = EXCLUDED.allow_vehicle_sharing, is_active = EXCLUDED.is_active,
-         city = COALESCE(EXCLUDED.city, projects.city),
          updated_at = NOW()`,
       [
         p.id,
@@ -55,8 +54,7 @@ async function upsertProjects(client, projects = []) {
         p.description || null,
         p.allow_vehicle_sharing,
         p.is_active,
-        toTs(p.created_at),
-        p.city || null
+        toTs(p.created_at)
       ]
     );
   }

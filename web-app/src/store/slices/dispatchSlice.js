@@ -1,8 +1,10 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { apiRequest } from '../../api/client.js';
+import { mergeRequestRows } from '../../utils/mergeRequests.js';
 
 export const fetchRequests = createAsyncThunk('dispatch/fetchRequests', async (params = {}) => {
-  const query = new URLSearchParams(params).toString();
+  const { silent, ...queryParams } = params;
+  const query = new URLSearchParams(queryParams).toString();
   const res = await apiRequest(`/requests${query ? '?' + query : ''}`);
   return res.data;
 });
@@ -79,17 +81,84 @@ const dispatchSlice = createSlice({
       state.recommendations = null;
     },
     onNewRequest(state, action) {
-      state.requests.unshift(action.payload);
+      state.requests = mergeRequestRows(state.requests, [action.payload]);
+    },
+    upsertRequest(state, action) {
+      const req = action.payload;
+      if (!req?.id) return;
+      state.requests = mergeRequestRows(state.requests, [req]);
+      if (state.selectedRequest?.id === req.id) {
+        state.selectedRequest = { ...state.selectedRequest, ...req };
+      }
+    },
+    patchRequestFromAssignment(state, action) {
+      const { requestId, status, assignment, driverName, vehiclePlate } = action.payload || {};
+      if (!requestId) return;
+      const idx = state.requests.findIndex((r) => r.id === requestId);
+      if (idx === -1) {
+        const stub = {
+          id: requestId,
+          status: status || 'ASSIGNED',
+          assignment: assignment || null,
+          assigned_driver_name: driverName,
+          vehicle_plate: vehiclePlate,
+          request_code: assignment?.request?.request_code || assignment?.request_code,
+          pickup_address: assignment?.request?.pickup_address,
+          destination_address: assignment?.request?.destination_address,
+          staff: assignment?.staff || assignment?.request?.staff
+        };
+        state.requests = mergeRequestRows(state.requests, [stub]);
+        return;
+      }
+      const row = state.requests[idx];
+      const next = {
+        ...row,
+        status: status || row.status,
+        assignment: assignment || row.assignment,
+        assigned_driver_name: driverName ?? row.assigned_driver_name,
+        vehicle_plate: vehiclePlate ?? row.vehicle_plate
+      };
+      state.requests[idx] = next;
+      if (state.selectedRequest?.id === requestId) {
+        state.selectedRequest = { ...state.selectedRequest, ...next };
+      }
+    },
+    patchRequestStatusByAssignment(state, action) {
+      const { assignmentId, newStatus } = action.payload || {};
+      if (!assignmentId || !newStatus) return;
+      const idx = state.requests.findIndex(
+        (r) => r.assignment?.id === assignmentId || r.assignment_id === assignmentId
+      );
+      if (idx === -1) return;
+      const row = state.requests[idx];
+      const terminal = new Set(['COMPLETED', 'CANCELLED', 'REJECTED']);
+      const requestStatus = terminal.has(newStatus)
+        ? newStatus
+        : row.status === 'COMPLETED'
+          ? row.status
+          : newStatus;
+      const next = {
+        ...row,
+        status: requestStatus,
+        assignment: row.assignment ? { ...row.assignment, status: newStatus } : row.assignment
+      };
+      state.requests[idx] = next;
+      if (state.selectedRequest?.id === row.id) {
+        state.selectedRequest = { ...state.selectedRequest, ...next };
+      }
     }
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchRequests.pending, (state) => {
-        state.loading = true;
+      .addCase(fetchRequests.pending, (state, action) => {
+        const silent = Boolean(action.meta?.arg?.silent);
+        if (!silent && !state.requests.length) {
+          state.loading = true;
+        }
       })
       .addCase(fetchRequests.fulfilled, (state, action) => {
         state.loading = false;
-        state.requests = action.payload;
+        state.requests = mergeRequestRows(state.requests, action.payload || []);
       })
       .addCase(fetchRequests.rejected, (state) => {
         state.loading = false;
@@ -159,5 +228,12 @@ const dispatchSlice = createSlice({
   }
 });
 
-export const { selectRequest, clearRecommendations, onNewRequest } = dispatchSlice.actions;
+export const {
+  selectRequest,
+  clearRecommendations,
+  onNewRequest,
+  upsertRequest,
+  patchRequestFromAssignment,
+  patchRequestStatusByAssignment
+} = dispatchSlice.actions;
 export default dispatchSlice.reducer;

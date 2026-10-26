@@ -6,8 +6,30 @@
 
 export const initialStore = {
   countries: [
-    { id: 'cnt-ethiopia', name: 'Ethiopia', code: 'ET', currency: 'ETB', is_active: true, created_at: new Date() },
-    { id: 'cnt-kenya', name: 'Kenya', code: 'KE', currency: 'KES', is_active: true, created_at: new Date() }
+    {
+      id: 'cnt-ethiopia',
+      name: 'Ethiopia',
+      code: 'ET',
+      currency: 'ETB',
+      timezone: 'Africa/Addis_Ababa',
+      day_shift_start: '08:00',
+      day_shift_end: '17:30',
+      weekend_days: [6, 0],
+      is_active: true,
+      created_at: new Date()
+    },
+    {
+      id: 'cnt-kenya',
+      name: 'Kenya',
+      code: 'KE',
+      currency: 'KES',
+      timezone: 'Africa/Nairobi',
+      day_shift_start: '08:00',
+      day_shift_end: '17:30',
+      weekend_days: [6, 0],
+      is_active: true,
+      created_at: new Date()
+    }
   ],
   projects: [
     {

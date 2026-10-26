@@ -1,87 +1,94 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { useDispatch } from 'react-redux';
-import { refreshStaffTrips } from '../store/tripSlice';
+import { useSelector } from 'react-redux';
+import { notifyOnce } from '../services/localNotifications';
 import { colors } from '../theme/colors';
 import { useTranslation } from '../i18n';
 import RequestRideScreen from './RequestRideScreen';
 import ActiveRideScreen from './ActiveRideScreen';
 import RideHistoryScreen from './RideHistoryScreen';
 import TabBarIcon from '../components/TabBarIcon';
+import AppFooter from '../components/AppFooter';
+import AccountScreen from './AccountScreen';
 
-export const StaffHomeScreen = () => {
-  const dispatch = useDispatch();
+export const StaffHomeScreen = ({ openProfileSignal = 0 }) => {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('ACTIVE'); // 'REQUEST', 'ACTIVE', 'HISTORY'
-  const tripSnapshotRef = useRef({});
-  const syncInFlightRef = useRef(false);
+  const [requestFormKey, setRequestFormKey] = useState(0);
 
-  const syncTrips = React.useCallback(() => {
-    if (syncInFlightRef.current) return;
-    syncInFlightRef.current = true;
-    dispatch(refreshStaffTrips())
-      .unwrap()
-      .then((rows) => {
-        (rows || []).forEach((trip) => {
-          if (!trip?.id) return;
-          const prev = tripSnapshotRef.current[trip.id];
-          const snap = {
-            status: trip.status,
-            driver: trip.assigned_driver_name,
-            plate: trip.external_vehicle_plate
-          };
-          if (prev) {
-            if (prev.status === 'PENDING' && trip.status === 'ASSIGNED' && trip.assigned_driver_name) {
-              Alert.alert(
-                'Car assigned',
-                `${trip.assigned_vehicle_plate || 'Fleet vehicle'} — ${trip.assigned_driver_name} is coming to your pickup.`
-              );
-            }
-            if (trip.status === 'EXTERNAL_AUTHORIZED' && prev.status !== 'EXTERNAL_AUTHORIZED') {
-              Alert.alert(
-                'Taxi / Uber arranged',
-                `Coordinator sent ${trip.external_vehicle_plate || 'a taxi'} (${trip.external_driver_name || 'driver'}). Open Active Ride to start when you board.`
-              );
-            }
-          }
-          tripSnapshotRef.current[trip.id] = snap;
-        });
-      })
-      .catch(() => {
-        /* keep last known trips in store */
-      })
-      .finally(() => {
-        syncInFlightRef.current = false;
-      });
-  }, [dispatch]);
+  const openRequestTab = () => {
+    setRequestFormKey((k) => k + 1);
+    setActiveTab('REQUEST');
+  };
+  const staffRequests = useSelector((state) => state.trips.requests);
+  const tripSnapshotRef = useRef({});
 
   useEffect(() => {
-    syncTrips();
-    const poll = setInterval(syncTrips, 15000);
-    return () => clearInterval(poll);
-  }, [syncTrips]);
+    if (openProfileSignal > 0) setActiveTab('ACCOUNT');
+  }, [openProfileSignal]);
+
+  useEffect(() => {
+    staffRequests.forEach((trip) => {
+      if (!trip?.id) return;
+      const prev = tripSnapshotRef.current[trip.id];
+      const snap = {
+        status: trip.status,
+        driver: trip.assigned_driver_name,
+        plate: trip.external_vehicle_plate
+      };
+      if (prev) {
+        if (prev.status === 'PENDING' && trip.status === 'ASSIGNED' && trip.assigned_driver_name) {
+          const msg = `${trip.assigned_vehicle_plate || 'Fleet vehicle'} — ${trip.assigned_driver_name} is coming to your pickup.`;
+          Alert.alert('Car assigned', msg);
+          notifyOnce(`staff-assigned-${trip.id}`, 'Driver assigned', msg);
+        }
+        if (prev.status !== 'ARRIVED' && trip.status === 'ARRIVED') {
+          notifyOnce(
+            `arrived-${trip.id}`,
+            'Driver arrived at pickup',
+            'Your driver has arrived at the pickup location.'
+          );
+        }
+        if (prev.status !== 'COMPLETED' && trip.status === 'COMPLETED') {
+          notifyOnce(`completed-${trip.id}`, 'Trip completed', 'Your movement has been marked complete.');
+        }
+        if (trip.status === 'EXTERNAL_AUTHORIZED' && prev.status !== 'EXTERNAL_AUTHORIZED') {
+          Alert.alert(
+            'Taxi / Uber arranged',
+            `Coordinator sent ${trip.external_vehicle_plate || 'a taxi'} (${trip.external_driver_name || 'driver'}). Open Active Ride to start when you board.`
+          );
+        }
+      }
+      tripSnapshotRef.current[trip.id] = snap;
+    });
+  }, [staffRequests]);
 
   return (
     <View style={styles.container}>
       {/* Screen Body */}
       <View style={styles.body}>
         {activeTab === 'REQUEST' && (
-          <RequestRideScreen onNavigateToActive={() => setActiveTab('ACTIVE')} />
+          <RequestRideScreen
+            key={`staff-request-${requestFormKey}`}
+            onNavigateToActive={() => setActiveTab('ACTIVE')}
+          />
         )}
         {activeTab === 'ACTIVE' && (
-          <ActiveRideScreen onNavigateToRequest={() => setActiveTab('REQUEST')} />
+          <ActiveRideScreen onNavigateToRequest={openRequestTab} />
         )}
         {activeTab === 'HISTORY' && (
           <RideHistoryScreen onSelectTrip={() => setActiveTab('ACTIVE')} />
         )}
+        {activeTab === 'ACCOUNT' && <AccountScreen />}
       </View>
 
-      {/* Bottom Segmented Bar */}
+      <AppFooter />
+
       <View style={styles.bottomNav}>
         {/* Tab 1: Request */}
         <TouchableOpacity
           style={[styles.navItem, activeTab === 'REQUEST' && styles.navItemActive]}
-          onPress={() => setActiveTab('REQUEST')}
+          onPress={openRequestTab}
           activeOpacity={0.8}
         >
           <TabBarIcon name={activeTab === 'REQUEST' ? 'create' : 'create-outline'} focused={activeTab === 'REQUEST'} />
@@ -115,6 +122,15 @@ export const StaffHomeScreen = () => {
           <Text style={[styles.navLabel, activeTab === 'HISTORY' && styles.navLabelActive]}>
             {t('tabHistory')}
           </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.navItem, activeTab === 'ACCOUNT' && styles.navItemActive]}
+          onPress={() => setActiveTab('ACCOUNT')}
+          activeOpacity={0.8}
+        >
+          <TabBarIcon name={activeTab === 'ACCOUNT' ? 'person' : 'person-outline'} focused={activeTab === 'ACCOUNT'} />
+          <Text style={[styles.navLabel, activeTab === 'ACCOUNT' && styles.navLabelActive]}>Profile</Text>
         </TouchableOpacity>
       </View>
     </View>

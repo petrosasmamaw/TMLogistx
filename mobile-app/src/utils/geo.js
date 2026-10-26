@@ -34,40 +34,16 @@ export function formatDistanceDisplay(trip) {
   return `${km} km`;
 }
 
-const GEO_KEY =
-  typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_GEOAPIFY_API_KEY
-    ? process.env.EXPO_PUBLIC_GEOAPIFY_API_KEY
-    : '';
+import { getMapboxAccessToken, mapboxForwardGeocode, mapboxReverseGeocode } from './mapbox.js';
 
 export async function reverseGeocode(lat, lng) {
-  if (!GEO_KEY) return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-  try {
-    const url = `https://api.geoapify.com/v1/geocode/reverse?lat=${lat}&lon=${lng}&apiKey=${GEO_KEY}`;
-    const res = await fetch(url);
-    const data = await res.json();
-    const f = data?.features?.[0];
-    return f?.properties?.formatted || f?.properties?.address_line1 || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-  } catch {
-    return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-  }
+  const fallback = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  if (!getMapboxAccessToken()) return fallback;
+  const label = await mapboxReverseGeocode(lat, lng);
+  return label || fallback;
 }
 
 export async function geocodeAddress(text) {
-  if (!text?.trim()) return null;
-  if (!GEO_KEY) return null;
-  try {
-    const params = new URLSearchParams({ text: text.trim(), limit: '1', apiKey: GEO_KEY });
-    const res = await fetch(`https://api.geoapify.com/v1/geocode/search?${params}`);
-    const data = await res.json();
-    const f = data?.features?.[0];
-    if (!f) return null;
-    const p = f.properties;
-    return {
-      lat: p.lat ?? f.geometry?.coordinates?.[1],
-      lng: p.lon ?? f.geometry?.coordinates?.[0],
-      label: p.formatted || text.trim()
-    };
-  } catch {
-    return null;
-  }
+  if (!text?.trim() || !getMapboxAccessToken()) return null;
+  return mapboxForwardGeocode(text, { limit: 1 });
 }

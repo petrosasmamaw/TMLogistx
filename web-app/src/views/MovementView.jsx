@@ -12,7 +12,10 @@ import {
   cancelRequest
 } from '../store/slices/dispatchSlice.js';
 import { fetchLiveFleet, fetchVehicles, fetchDrivers, fetchAccidents } from '../store/slices/fleetSlice.js';
+import { fetchCountries, fetchProjects } from '../store/slices/projectSlice.js';
 import FleetMap from '../components/FleetMap.jsx';
+import useProjectMapFocus from '../hooks/useProjectMapFocus.js';
+import { pickProjectForUser } from '../utils/projectMapFocus.js';
 import { Skeleton } from '../components/ui/Skeleton.jsx';
 import AdminSectionHeader from '../components/admin/AdminSectionHeader.jsx';
 import AdminStatCard from '../components/admin/AdminStatCard.jsx';
@@ -43,6 +46,7 @@ import {
   externalRideStatusLabel,
   isExternalRideRequest
 } from '../utils/rideHelpers.js';
+import { PROJECT_REQUEST_UPSERT } from '../utils/mergeRequests.js';
 
 export default function MovementView() {
   const { section: activeTab } = usePortalNav();
@@ -51,6 +55,11 @@ export default function MovementView() {
   const { liveFleet, liveDrivers, vehicles, drivers, loading: fleetLoading } = useSelector(
     (state) => state.fleet
   );
+  const { user } = useSelector((state) => state.auth);
+  const { projects = [], countries = [] } = useSelector((state) => state.project);
+  const movementProjectId = user?.project_id || user?.projectId || user?.project?.id || null;
+  const activeProject = pickProjectForUser(projects, movementProjectId, countries);
+  const { mapView: projectMapView } = useProjectMapFocus(activeProject);
 
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [showExternalModal, setShowExternalModal] = useState(false);
@@ -59,6 +68,11 @@ export default function MovementView() {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assignSaving, setAssignSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 4000);
+  };
 
   // Forms
   const [externalForm, setExternalForm] = useState({
@@ -92,6 +106,22 @@ export default function MovementView() {
   });
 
   useEffect(() => {
+    dispatch(fetchProjects());
+    dispatch(fetchCountries());
+  }, [dispatch]);
+
+  useEffect(() => {
+    const onUpsert = (e) => {
+      const req = e.detail?.request;
+      if (!req?.id) return;
+      const code = req.request_code || req.request_number || req.id;
+      showToast(`New request ${code} added to the queue`);
+    };
+    window.addEventListener(PROJECT_REQUEST_UPSERT, onUpsert);
+    return () => window.removeEventListener(PROJECT_REQUEST_UPSERT, onUpsert);
+  }, []);
+
+  useEffect(() => {
     if (activeTab === 'map') {
       dispatch(fetchLiveFleet());
       const mapInterval = setInterval(() => dispatch(fetchLiveFleet()), 15000);
@@ -99,19 +129,20 @@ export default function MovementView() {
     }
     if (activeTab !== 'dispatch') return undefined;
 
-    dispatch(fetchRequests());
+    if (!requests?.length) {
+      dispatch(fetchRequests());
+    }
     dispatch(fetchLiveFleet());
-    dispatch(fetchVehicles());
-    dispatch(fetchDrivers());
+    if (!vehicles?.length) dispatch(fetchVehicles());
+    if (!drivers?.length) dispatch(fetchDrivers());
     dispatch(fetchAccidents());
 
     const interval = setInterval(() => {
-      dispatch(fetchRequests());
       dispatch(fetchLiveFleet());
       dispatch(fetchAccidents());
-    }, 12000);
+    }, 60000);
     return () => clearInterval(interval);
-  }, [dispatch, activeTab]);
+  }, [dispatch, activeTab, requests.length, vehicles.length, drivers.length]);
 
   const handleSelectRequest = (req) => {
     dispatch(selectRequest(req));
@@ -149,7 +180,7 @@ export default function MovementView() {
 
       setShowAssignModal(false);
       showToast('Car and driver assigned to this request.');
-      dispatch(fetchRequests());
+      dispatch(fetchRequests({ silent: true }));
       dispatch(fetchLiveFleet());
       dispatch(fetchVehicles());
       dispatch(fetchDrivers());
@@ -194,7 +225,7 @@ export default function MovementView() {
 
       setShowUberDispatchModal(false);
       showToast(`External ride booked and dispatched to staff mobile app!`);
-      dispatch(fetchRequests());
+      dispatch(fetchRequests({ silent: true }));
     } catch (err) {
       alert(`Uber dispatch failed: ${err.message || err}`);
     }
@@ -223,7 +254,7 @@ export default function MovementView() {
 
       setShowReassignModal(false);
       showToast(`Trip reassigned successfully!`);
-      dispatch(fetchRequests());
+      dispatch(fetchRequests({ silent: true }));
       dispatch(fetchLiveFleet());
       dispatch(fetchVehicles());
     } catch (err) {
@@ -241,7 +272,7 @@ export default function MovementView() {
       })).unwrap();
 
       showToast('Assignment cancelled. Vehicle & driver restored to available.');
-      dispatch(fetchRequests());
+      dispatch(fetchRequests({ silent: true }));
       dispatch(fetchLiveFleet());
       dispatch(fetchVehicles());
     } catch (err) {
@@ -260,15 +291,10 @@ export default function MovementView() {
 
       setShowExternalModal(false);
       showToast(`Alternative transport (${externalForm.provider_name}) confirmed!`);
-      dispatch(fetchRequests());
+      dispatch(fetchRequests({ silent: true }));
     } catch (err) {
       alert(`External dispatch failed: ${err.message}`);
     }
-  };
-
-  const showToast = (msg) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4000);
   };
 
   const filteredRequests = requests.filter((r) => {
@@ -317,7 +343,13 @@ export default function MovementView() {
             Loading map positions…
           </div>
         ) : (
-          <FleetMap vehicles={liveFleet} drivers={liveDrivers} height="min(58vh, 640px)" showCitySearch />
+          <FleetMap
+            vehicles={liveFleet}
+            drivers={liveDrivers}
+            defaultMapView={projectMapView}
+            height="min(58vh, 640px)"
+            showCitySearch
+          />
         )}
         {!fleetLoading && liveFleet.length === 0 && liveDrivers.length === 0 && (
           <p className="text-xs text-slate-500 text-center">
@@ -341,7 +373,7 @@ export default function MovementView() {
       <AdminSectionHeader
         icon={Compass}
         title="Dispatch console"
-        subtitle="Assign vehicles, external rides, and monitor the request inbox. Use the status cards to filter the inbox."
+        subtitle="Assign cars and drivers to trips (no vehicle or driver registration here — Logistics Coordinator manages fleet)."
       />
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -618,6 +650,9 @@ export default function MovementView() {
                 vehicles={liveFleet}
                 drivers={liveDrivers}
                 selectedRequest={selectedRequest}
+                highlightDriverId={selectedRequest?.assignment?.driver?.id}
+                highlightVehicleId={selectedRequest?.assignment?.vehicle?.id}
+                defaultMapView={projectMapView}
                 height="320px"
                 showCitySearch={false}
               />

@@ -9,6 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import LoadingButton from '../components/LoadingButton';
+import { ListSkeleton } from '../components/Skeleton';
 import { useSelector } from 'react-redux';
 import { colors } from '../theme/colors';
 import apiClient from '../api/client';
@@ -138,7 +139,7 @@ export default function DriverAccidentScreen({ onBack, onComplete }) {
       <View style={styles.vehicleBanner}>
         <Text style={styles.vehicleLabel}>Fleet vehicle for this report</Text>
         {contextLoading ? (
-          <Text style={styles.vehicleValue}>Loading vehicles…</Text>
+          <ListSkeleton rows={1} />
         ) : vehicleOptions.length > 1 ? (
           <View style={styles.vehiclePickList}>
             {vehicleOptions.map((v) => {

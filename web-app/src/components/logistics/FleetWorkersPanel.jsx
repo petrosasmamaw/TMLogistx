@@ -17,7 +17,12 @@ function resolveCoordinatorProjectId(user) {
   return user.project_id || user.projectId || user.project?.id || null;
 }
 
-export default function FleetWorkersPanel({ onCountsChange, onDriversChanged }) {
+export default function FleetWorkersPanel({
+  onCountsChange,
+  onDriversChanged,
+  /** Logistics coordinator: driver accounts only (staff → Master Person). */
+  driversOnly = false
+}) {
   const { user } = useSelector((state) => state.auth);
   const projectId = resolveCoordinatorProjectId(user);
 
@@ -28,7 +33,7 @@ export default function FleetWorkersPanel({ onCountsChange, onDriversChanged }) 
   const [saving, setSaving] = useState(false);
   const [savingShiftId, setSavingShiftId] = useState(null);
   const [createdCreds, setCreatedCreds] = useState(null);
-  const [mode, setMode] = useState('STAFF');
+  const [mode, setMode] = useState(driversOnly ? 'DRIVER' : 'STAFF');
   const [shiftModal, setShiftModal] = useState(null);
   const [shiftForm, setShiftForm] = useState({ shift_type: DRIVER_SHIFT_DAY });
   const [form, setForm] = useState({
@@ -39,6 +44,7 @@ export default function FleetWorkersPanel({ onCountsChange, onDriversChanged }) 
     license_number: '',
     shift_type: DRIVER_SHIFT_DAY
   });
+  const [avatarPreview, setAvatarPreview] = useState(null);
 
   const counts = useMemo(() => {
     const staff = workers.filter((w) => w.role === 'STAFF').length;
@@ -60,7 +66,9 @@ export default function FleetWorkersPanel({ onCountsChange, onDriversChanged }) 
           apiRequest('/users'),
           apiRequest('/drivers')
         ]);
-        const rows = (uRes.data || []).filter((u) => ['STAFF', 'DRIVER'].includes(u.role));
+        const rows = (uRes.data || []).filter((u) =>
+          driversOnly ? u.role === 'DRIVER' : ['STAFF', 'DRIVER'].includes(u.role)
+        );
         setWorkers(rows);
         const map = {};
         (dRes.data || []).forEach((d) => {
@@ -78,15 +86,32 @@ export default function FleetWorkersPanel({ onCountsChange, onDriversChanged }) 
         setRefreshing(false);
       }
     },
-    [projectId]
+    [projectId, driversOnly]
   );
+
+  useEffect(() => {
+    if (driversOnly) setMode('DRIVER');
+  }, [driversOnly]);
 
   useEffect(() => {
     load(false);
   }, [load]);
 
+  const handleAvatarFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setAvatarPreview(reader.result);
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.phone_number?.trim()) {
+      alert('Phone number is required for staff and drivers.');
+      return;
+    }
     if (mode === 'DRIVER' && !form.license_number?.trim()) {
       alert('License number is required for drivers.');
       return;
@@ -107,6 +132,7 @@ export default function FleetWorkersPanel({ onCountsChange, onDriversChanged }) 
         body.license_number = form.license_number;
         body.shift_type = form.shift_type;
       }
+      if (avatarPreview) body.avatar_image = avatarPreview;
       await apiRequest('/users', { method: 'POST', body });
       setCreatedCreds({ email: form.email, password: form.password, role: mode });
       setForm({
@@ -117,6 +143,7 @@ export default function FleetWorkersPanel({ onCountsChange, onDriversChanged }) 
         license_number: '',
         shift_type: DRIVER_SHIFT_DAY
       });
+      setAvatarPreview(null);
       await load(true);
       onDriversChanged?.();
     } catch (err) {
@@ -173,30 +200,35 @@ export default function FleetWorkersPanel({ onCountsChange, onDriversChanged }) 
     <div className="space-y-4">
       <div className="glass-panel rounded-2xl border border-slate-200 p-4">
         <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
-          <UserPlus className="w-4 h-4 text-brand-600" /> Create mobile app login
+          <UserPlus className="w-4 h-4 text-brand-600" />
+          {driversOnly ? 'Register driver mobile account' : 'Create mobile app login'}
         </h2>
         <p className="text-xs text-slate-500 mb-3">
-          Staff: {counts.staff} · Drivers: {counts.drivers} · Total: {counts.total}
+          {driversOnly
+            ? `Drivers on project: ${counts.drivers}. Staff accounts are registered by your Master Person.`
+            : `Staff: ${counts.staff} · Drivers: ${counts.drivers} · Total: ${counts.total}`}
           {refreshing && <span className="ml-2 text-brand-600">Updating list…</span>}
         </p>
-        <div className="flex gap-2 mb-3">
-          <button
-            type="button"
-            disabled={formDisabled}
-            onClick={() => setMode('STAFF')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50 ${mode === 'STAFF' ? 'bg-brand-600 text-white' : 'bg-slate-100'}`}
-          >
-            Staff ({counts.staff})
-          </button>
-          <button
-            type="button"
-            disabled={formDisabled}
-            onClick={() => setMode('DRIVER')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50 ${mode === 'DRIVER' ? 'bg-emerald-600 text-white' : 'bg-slate-100'}`}
-          >
-            Driver ({counts.drivers})
-          </button>
-        </div>
+        {!driversOnly && (
+          <div className="flex gap-2 mb-3">
+            <button
+              type="button"
+              disabled={formDisabled}
+              onClick={() => setMode('STAFF')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50 ${mode === 'STAFF' ? 'bg-brand-600 text-white' : 'bg-slate-100'}`}
+            >
+              Staff ({counts.staff})
+            </button>
+            <button
+              type="button"
+              disabled={formDisabled}
+              onClick={() => setMode('DRIVER')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50 ${mode === 'DRIVER' ? 'bg-emerald-600 text-white' : 'bg-slate-100'}`}
+            >
+              Driver ({counts.drivers})
+            </button>
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
           <input
             required
@@ -225,12 +257,20 @@ export default function FleetWorkersPanel({ onCountsChange, onDriversChanged }) 
             inputClassName="p-2.5 rounded-xl border disabled:bg-slate-50"
           />
           <input
+            required
             disabled={formDisabled}
-            placeholder="Phone"
+            placeholder="Phone (unique)"
             value={form.phone_number}
             onChange={(e) => setForm({ ...form, phone_number: e.target.value })}
             className="p-2.5 rounded-xl border disabled:bg-slate-50"
           />
+          <label className="text-xs font-semibold text-slate-600">
+            Profile photo (optional)
+            <input type="file" accept="image/*" disabled={formDisabled} onChange={handleAvatarFile} className="mt-1 block text-xs" />
+          </label>
+          {avatarPreview ? (
+            <img src={avatarPreview} alt="" className="w-12 h-12 rounded-full object-cover border border-slate-200" />
+          ) : null}
           {mode === 'DRIVER' && (
             <>
               <input

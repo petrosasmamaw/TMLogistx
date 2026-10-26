@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { upsertStaffTrip, refreshStaffTrips } from '../store/tripSlice';
+import { updateLocation } from '../store/gpsSlice';
 import { colors } from '../theme/colors';
 import { useTranslation } from '../i18n';
 import apiClient from '../api/client';
@@ -19,17 +20,33 @@ import { mapApiRequestToMobile } from '../utils/mapApiTrip.js';
 import LoadingButton from '../components/LoadingButton';
 import MapLocationPicker from '../components/MapLocationPicker';
 import AnimatedTripCard from '../components/AnimatedTripCard';
-import { reverseGeocode, geocodeAddress, haversineKm } from '../utils/geo';
+import RequestRoutePreview from '../components/RequestRoutePreview';
+import { Skeleton } from '../components/Skeleton';
+import { reverseGeocode, haversineKm } from '../utils/geo';
+import useMovementFormContext from '../hooks/useMovementFormContext';
+
+function localDateString() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function localTimeString() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 export const RequestRideScreen = ({ onNavigateToActive }) => {
   const dispatch = useDispatch();
   const user = useSelector((state) => state.auth.user);
   const { t } = useTranslation();
 
-  const [pickupManual, setPickupManual] = useState(false);
+  const [pickupMode, setPickupMode] = useState('gps');
   const [pickupLabel, setPickupLabel] = useState('');
   const [pickupCoords, setPickupCoords] = useState(null);
   const [pickupSource, setPickupSource] = useState('gps');
+  const [pickupMapOpen, setPickupMapOpen] = useState(false);
   const [loadingGps, setLoadingGps] = useState(true);
 
   const [destMode, setDestMode] = useState('map');
@@ -43,6 +60,13 @@ export const RequestRideScreen = ({ onNavigateToActive }) => {
   const [cargoNotes, setCargoNotes] = useState('');
   const [tripCategory, setTripCategory] = useState('OFFICIAL');
   const [submitting, setSubmitting] = useState(false);
+  const [departureDate, setDepartureDate] = useState(localDateString());
+  const [departureTime, setDepartureTime] = useState(localTimeString());
+  const [dropoffOrWait, setDropoffOrWait] = useState('');
+
+  const { ctx, showPurpose, showDropoffWait, loading: ctxLoading } = useMovementFormContext(
+    user?.project_id
+  );
 
   const refreshGpsPickup = useCallback(async () => {
     setLoadingGps(true);
@@ -59,10 +83,19 @@ export const RequestRideScreen = ({ onNavigateToActive }) => {
       setPickupCoords({ lat, lng });
       setPickupLabel(label);
       setPickupSource('gps');
-      setPickupManual(false);
+      setPickupMode('gps');
+      dispatch(
+        updateLocation({
+          latitude: lat,
+          longitude: lng,
+          accuracy: pos.coords.accuracy,
+          speedKmh: 0,
+          heading: 0
+        })
+      );
     } catch {
       Alert.alert('Location', 'Could not read GPS. Enter pickup manually.');
-      setPickupManual(true);
+      setPickupMode('manual');
     } finally {
       setLoadingGps(false);
     }
@@ -73,9 +106,18 @@ export const RequestRideScreen = ({ onNavigateToActive }) => {
   }, [refreshGpsPickup]);
 
   const mapDistancePreview = () => {
-    if (destSource !== 'map' || !pickupCoords || !destCoords) return '—';
+    const pickupOnMap = pickupSource === 'map' || pickupSource === 'gps';
+    if (!pickupOnMap || destSource !== 'map' || !pickupCoords || !destCoords) return '—';
     const km = haversineKm(pickupCoords.lat, pickupCoords.lng, destCoords.lat, destCoords.lng);
     return km != null ? `${km} km` : '—';
+  };
+
+  const handlePickupMapPick = async (lat, lng) => {
+    const label = await reverseGeocode(lat, lng);
+    setPickupCoords({ lat, lng });
+    setPickupLabel(label);
+    setPickupSource('map');
+    setPickupMode('map');
   };
 
   const handleDestMapPick = async (lat, lng) => {
@@ -91,23 +133,15 @@ export const RequestRideScreen = ({ onNavigateToActive }) => {
     let pLabel = pickupLabel.trim();
     let pSrc = pickupSource;
 
-    if (pickupManual) {
+    if (pickupMode === 'manual') {
       if (!pLabel) {
-        Alert.alert('Pickup', 'Enter a pickup address or use your location.');
+        Alert.alert('Pickup', 'Enter a pickup description.');
         return;
       }
-      const geo = await geocodeAddress(pLabel);
-      if (!geo) {
-        Alert.alert('Pickup', 'Could not find that address. Try a clearer description.');
-        return;
-      }
-      pCoords = { lat: geo.lat, lng: geo.lng };
-      pLabel = geo.label;
+      pCoords = null;
       pSrc = 'manual';
-    }
-
-    if (!pCoords) {
-      Alert.alert('Pickup', 'Set your pickup point first.');
+    } else if (!pCoords) {
+      Alert.alert('Pickup', 'Set your pickup point (GPS or map).');
       return;
     }
 
@@ -117,29 +151,34 @@ export const RequestRideScreen = ({ onNavigateToActive }) => {
 
     if (destMode === 'manual') {
       if (!dLabel) {
-        Alert.alert('Destination', 'Enter destination or choose on map.');
+        Alert.alert('Destination', 'Enter destination text.');
         return;
       }
-      const geo = await geocodeAddress(dLabel);
-      if (!geo) {
-        Alert.alert('Destination', 'Could not find destination. Try map select.');
-        return;
-      }
-      dCoords = { lat: geo.lat, lng: geo.lng };
-      dLabel = geo.label;
+      dCoords = null;
       dSrc = 'manual';
     } else if (!dCoords) {
       Alert.alert('Destination', 'Choose destination on the map.');
       return;
     }
 
-    if (!purpose.trim()) {
-      Alert.alert('Required', t('validationError'));
+    if ((ctxLoading || showPurpose) && !purpose.trim()) {
+      Alert.alert('Required', 'Purpose of visit is required during day shift.');
+      return;
+    }
+    if (showDropoffWait && !dropoffOrWait) {
+      Alert.alert('Required', 'Select drop-off or wait at destination.');
+      return;
+    }
+    if (!departureTime.trim()) {
+      Alert.alert('Required', 'Enter time of departure.');
       return;
     }
 
     const mapKm =
-      pSrc === 'map' && dSrc === 'map'
+      (pSrc === 'map' || pSrc === 'gps') &&
+      dSrc === 'map' &&
+      pCoords &&
+      dCoords
         ? haversineKm(pCoords.lat, pCoords.lng, dCoords.lat, dCoords.lng)
         : null;
 
@@ -149,17 +188,20 @@ export const RequestRideScreen = ({ onNavigateToActive }) => {
       passenger_count: parseInt(passengerCount, 10) || 1,
       pickup_address: pLabel,
       pickup_location: pLabel,
-      pickup_latitude: pCoords.lat,
-      pickup_longitude: pCoords.lng,
+      pickup_latitude: pCoords?.lat ?? null,
+      pickup_longitude: pCoords?.lng ?? null,
       pickup_location_source: pSrc === 'gps' ? 'gps' : pSrc,
       destination_address: dLabel,
       destination_location: dLabel,
-      destination_latitude: dCoords.lat,
-      destination_longitude: dCoords.lng,
+      destination_latitude: dCoords?.lat ?? null,
+      destination_longitude: dCoords?.lng ?? null,
       destination_location_source: dSrc,
       map_estimated_distance_km: mapKm,
-      requested_datetime: new Date().toISOString(),
-      purpose,
+      departure_date: departureDate,
+      departure_time: departureTime,
+      dropoff_or_wait_proposal: showDropoffWait ? dropoffOrWait : dropoffOrWait || 'DROP_OFF',
+      movement_shift_band: ctx?.movement_shift_band,
+      purpose: showPurpose ? purpose : '',
       special_instructions: cargoNotes,
       trip_category: tripCategory
     };
@@ -171,7 +213,7 @@ export const RequestRideScreen = ({ onNavigateToActive }) => {
         throw new Error('Server did not return your request id. Try again.');
       }
       dispatch(upsertStaffTrip(mapped));
-      dispatch(refreshStaffTrips());
+      dispatch(refreshStaffTrips({ silent: true }));
       Alert.alert('Success', t('requestSuccess'));
       setDestination('');
       setDestCoords(null);
@@ -190,6 +232,14 @@ export const RequestRideScreen = ({ onNavigateToActive }) => {
       <View style={styles.header}>
         <Text style={styles.title}>{t('requestTitle')}</Text>
         <Text style={styles.subtitle}>{t('requestSubtitle')}</Text>
+        {ctx ? (
+          <View style={styles.shiftBanner}>
+            <Text style={styles.shiftBannerTitle}>{ctx.movement_shift_label}</Text>
+            <Text style={styles.shiftBannerSub}>
+              {ctx.country?.name || 'Project'} · {ctx.local_time_label}
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       <AnimatedTripCard>
@@ -215,39 +265,93 @@ export const RequestRideScreen = ({ onNavigateToActive }) => {
           </View>
 
           <Text style={styles.label}>Start point</Text>
-          {!pickupManual ? (
+          <View style={styles.destToggle}>
+            <TouchableOpacity
+              style={[styles.destBtn, pickupMode === 'gps' && styles.destBtnActive]}
+              onPress={() => { setPickupMode('gps'); refreshGpsPickup(); }}
+            >
+              <Text style={[styles.destBtnText, pickupMode === 'gps' && styles.destBtnTextActive]}>My GPS</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.destBtn, pickupMode === 'map' && styles.destBtnActive]}
+              onPress={() => setPickupMode('map')}
+            >
+              <Text style={[styles.destBtnText, pickupMode === 'map' && styles.destBtnTextActive]}>On map</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.destBtn, pickupMode === 'manual' && styles.destBtnActive]}
+              onPress={() => { setPickupMode('manual'); setPickupSource('manual'); setPickupCoords(null); }}
+            >
+              <Text style={[styles.destBtnText, pickupMode === 'manual' && styles.destBtnTextActive]}>Manual</Text>
+            </TouchableOpacity>
+          </View>
+          {pickupMode === 'gps' && (
             <View style={styles.locationCard}>
               {loadingGps ? (
-                <ActivityIndicator color={colors.amber} />
+                <>
+                  <Skeleton height={14} width="40%" style={{ marginBottom: 8 }} />
+                  <Skeleton height={12} width="90%" style={{ marginBottom: 6 }} />
+                  <Skeleton height={12} width="55%" />
+                </>
               ) : (
                 <>
                   <Text style={styles.locationTitle}>Your location</Text>
                   <Text style={styles.locationValue}>{pickupLabel || 'Locating…'}</Text>
-                  <View style={styles.locationActions}>
-                    <TouchableOpacity onPress={refreshGpsPickup}>
-                      <Text style={styles.link}>Refresh GPS</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setPickupManual(true)}>
-                      <Text style={styles.link}>Enter manually</Text>
-                    </TouchableOpacity>
-                  </View>
+                  <TouchableOpacity onPress={refreshGpsPickup}>
+                    <Text style={styles.link}>Refresh GPS</Text>
+                  </TouchableOpacity>
                 </>
               )}
             </View>
-          ) : (
+          )}
+          {pickupMode === 'map' && (
+            <TouchableOpacity style={styles.mapSelectBtn} onPress={() => setPickupMapOpen(true)}>
+              <Text style={styles.mapSelectTitle}>
+                {pickupLabel ? pickupLabel : 'Open map to select pickup'}
+              </Text>
+              <Text style={styles.mapSelectSub}>Place name is filled from the map</Text>
+            </TouchableOpacity>
+          )}
+          {pickupMode === 'manual' && (
+            <TextInput
+              style={styles.input}
+              placeholder="Type pickup (name only — no map search)"
+              placeholderTextColor={colors.textMuted}
+              value={pickupLabel}
+              onChangeText={setPickupLabel}
+            />
+          )}
+
+          <Text style={styles.label}>
+            {showPurpose ? 'Time to departure' : 'Departure time'} *
+          </Text>
+          <View style={styles.rowInputs}>
+            <TextInput
+              style={[styles.input, styles.dateInput]}
+              placeholder="YYYY-MM-DD"
+              value={departureDate}
+              onChangeText={setDepartureDate}
+            />
+            <TextInput
+              style={[styles.input, styles.timeInput]}
+              placeholder="HH:MM"
+              value={departureTime}
+              onChangeText={setDepartureTime}
+            />
+          </View>
+
+          {(ctxLoading || showPurpose) ? (
             <>
+              <Text style={styles.label}>Purpose of visit *</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Type pickup address"
+                placeholder={t('purposePlaceholder')}
                 placeholderTextColor={colors.textMuted}
-                value={pickupLabel}
-                onChangeText={setPickupLabel}
+                value={purpose}
+                onChangeText={setPurpose}
               />
-              <TouchableOpacity onPress={() => { setPickupManual(false); refreshGpsPickup(); }}>
-                <Text style={styles.link}>Use my location instead</Text>
-              </TouchableOpacity>
             </>
-          )}
+          ) : null}
 
           <Text style={styles.label}>Destination</Text>
           <View style={styles.destToggle}>
@@ -270,7 +374,9 @@ export const RequestRideScreen = ({ onNavigateToActive }) => {
               <Text style={styles.mapSelectTitle}>
                 {destination ? destination : 'Open map to select destination'}
               </Text>
-              <Text style={styles.mapSelectSub}>Tap to place pin on map</Text>
+              <Text style={styles.mapSelectSub}>
+                {destination ? 'Tap to change pin' : 'Tap to place pin — place name shown above'}
+              </Text>
             </TouchableOpacity>
           ) : (
             <TextInput
@@ -282,8 +388,15 @@ export const RequestRideScreen = ({ onNavigateToActive }) => {
             />
           )}
 
+          <RequestRoutePreview
+            pickupLat={pickupCoords?.lat}
+            pickupLng={pickupCoords?.lng}
+            destLat={destCoords?.lat}
+            destLng={destCoords?.lng}
+          />
+
           <View style={styles.distanceRow}>
-            <Text style={styles.distanceLabel}>Route distance (map only)</Text>
+            <Text style={styles.distanceLabel}>Route distance (straight-line fallback)</Text>
             <Text style={styles.distanceValue}>{mapDistancePreview()}</Text>
           </View>
 
@@ -300,14 +413,33 @@ export const RequestRideScreen = ({ onNavigateToActive }) => {
             ))}
           </View>
 
-          <Text style={styles.label}>{t('purpose')} *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder={t('purposePlaceholder')}
-            placeholderTextColor={colors.textMuted}
-            value={purpose}
-            onChangeText={setPurpose}
-          />
+          {showDropoffWait ? (
+            <>
+              <Text style={styles.label}>Drop-off or wait *</Text>
+              <View style={styles.dropoffRow}>
+                {(ctx?.dropoff_wait_options || [
+                  { value: 'DROP_OFF', label: 'Drop-off' },
+                  { value: 'WAIT', label: 'Wait' },
+                  { value: 'DROP_OFF_AND_WAIT', label: 'Both' }
+                ]).map((opt) => (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[styles.dropoffBtn, dropoffOrWait === opt.value && styles.dropoffBtnActive]}
+                    onPress={() => setDropoffOrWait(opt.value)}
+                  >
+                    <Text
+                      style={[
+                        styles.dropoffBtnText,
+                        dropoffOrWait === opt.value && styles.dropoffBtnTextActive
+                      ]}
+                    >
+                      {opt.label.replace(' at destination', '').replace('Drop-off and wait', 'Both')}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          ) : null}
 
           <Text style={styles.label}>{t('cargoNotes')}</Text>
           <TextInput
@@ -331,6 +463,14 @@ export const RequestRideScreen = ({ onNavigateToActive }) => {
       </AnimatedTripCard>
 
       <MapLocationPicker
+        visible={pickupMapOpen}
+        title="Select pickup"
+        initialLat={pickupCoords?.lat ?? 9.02}
+        initialLng={pickupCoords?.lng ?? 38.75}
+        onClose={() => setPickupMapOpen(false)}
+        onConfirm={handlePickupMapPick}
+      />
+      <MapLocationPicker
         visible={mapPickerOpen}
         title="Select destination"
         initialLat={pickupCoords?.lat ?? 9.02}
@@ -348,6 +488,31 @@ const styles = StyleSheet.create({
   header: { marginBottom: 12 },
   title: { color: colors.textPrimary, fontSize: 22, fontWeight: '800' },
   subtitle: { color: colors.textSecondary, fontSize: 13, marginTop: 4 },
+  shiftBanner: {
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: colors.bgSecondary,
+    borderWidth: 1,
+    borderColor: colors.borderPrimary
+  },
+  shiftBannerTitle: { color: colors.primary, fontWeight: '800', fontSize: 13 },
+  shiftBannerSub: { color: colors.textMuted, fontSize: 11, marginTop: 2 },
+  rowInputs: { flexDirection: 'row', gap: 8 },
+  dateInput: { flex: 1.2 },
+  timeInput: { flex: 0.8 },
+  dropoffRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  dropoffBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borderPrimary,
+    backgroundColor: colors.bgInput
+  },
+  dropoffBtnActive: { borderColor: colors.primary, backgroundColor: colors.bgSecondary },
+  dropoffBtnText: { fontSize: 11, fontWeight: '600', color: colors.textMuted },
+  dropoffBtnTextActive: { color: colors.primary },
   formCard: {
     backgroundColor: colors.bgSecondary,
     borderRadius: 16,

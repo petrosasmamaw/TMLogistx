@@ -40,7 +40,7 @@ export default function MasterWorkersPanel() {
   const [editingWorker, setEditingWorker] = useState(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [workerForm, setWorkerForm] = useState({
-    role: 'LOGISTICS_COORDINATOR',
+    role: 'STAFF',
     full_name: '',
     email: '',
     password: '',
@@ -48,8 +48,9 @@ export default function MasterWorkersPanel() {
     license_number: '',
     shift_type: DRIVER_SHIFT_DAY
   });
+  const [workerAvatarPreview, setWorkerAvatarPreview] = useState(null);
   const [editForm, setEditForm] = useState({
-    role: 'LOGISTICS_COORDINATOR',
+    role: 'STAFF',
     full_name: '',
     phone_number: '',
     password: '',
@@ -86,10 +87,27 @@ export default function MasterWorkersPanel() {
     load();
   }, [load]);
 
+  const handleWorkerAvatarFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setWorkerAvatarPreview(reader.result);
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
   const handleCreateWorker = async (e) => {
     e.preventDefault();
+    if (['STAFF', 'DRIVER'].includes(workerForm.role) && !workerForm.phone_number?.trim()) {
+      alert('Phone number is required for staff and drivers.');
+      return;
+    }
     if (workerForm.role === 'DRIVER' && !workerForm.license_number?.trim()) {
       alert('License number is required for drivers.');
+      return;
+    }
+    if (['STAFF', 'DRIVER'].includes(workerForm.role) && !workerAvatarPreview) {
+      alert('Profile photo is required when creating staff or drivers.');
       return;
     }
     setSavingWorker(true);
@@ -107,10 +125,11 @@ export default function MasterWorkersPanel() {
         body.license_number = workerForm.license_number.trim();
         body.shift_type = workerForm.shift_type;
       }
+      if (workerAvatarPreview) body.avatar_image = workerAvatarPreview;
       await apiRequest('/users', { method: 'POST', body });
       setShowWorkerModal(false);
       setWorkerForm({
-        role: 'LOGISTICS_COORDINATOR',
+        role: 'STAFF',
         full_name: '',
         email: '',
         password: '',
@@ -118,6 +137,7 @@ export default function MasterWorkersPanel() {
         license_number: '',
         shift_type: DRIVER_SHIFT_DAY
       });
+      setWorkerAvatarPreview(null);
       load();
     } catch (err) {
       alert(err.message);
@@ -196,7 +216,7 @@ export default function MasterWorkersPanel() {
       <AdminSectionHeader
         icon={Users}
         title="Project workers"
-        subtitle={`Register Logistics Coordinator, Movement Center, staff, and drivers for ${activeProject?.name || 'this project'}. City: ${activeProject?.city || '—'}`}
+        subtitle={`Register staff mobile accounts, drivers, coordinators, and movement officers for ${activeProject?.name || 'this project'} (staff registration is only here — not Logistics Coordinator). City: ${activeProject?.city || '—'}`}
         actions={
           <button
             type="button"
@@ -319,10 +339,18 @@ export default function MasterWorkersPanel() {
             />
             <input
               className="w-full border rounded-lg px-3 py-2 text-sm"
-              placeholder="Phone"
+              placeholder="Phone (unique, required for staff/driver)"
               value={workerForm.phone_number}
               onChange={(e) => setWorkerForm({ ...workerForm, phone_number: e.target.value })}
+              required={['STAFF', 'DRIVER'].includes(workerForm.role)}
             />
+            <label className="text-xs font-semibold text-slate-600 block">
+              Profile photo {['STAFF', 'DRIVER'].includes(workerForm.role) ? '(required)' : '(optional)'}
+              <input type="file" accept="image/*" onChange={handleWorkerAvatarFile} className="mt-1 block text-xs" />
+            </label>
+            {workerAvatarPreview ? (
+              <img src={workerAvatarPreview} alt="" className="w-12 h-12 rounded-full object-cover border" />
+            ) : null}
             <PasswordField
               required
               minLength={8}

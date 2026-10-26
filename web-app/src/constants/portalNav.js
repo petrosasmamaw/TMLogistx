@@ -43,20 +43,19 @@ const ADMIN_NAV = [
   { id: 'audit', label: 'Audit Logs', icon: ShieldAlert }
 ];
 
-/** Role 3 — fleet & transport resources (no dispatch console) */
+/** Role 3 — fleet resources: vehicles, drivers, expenses (no dispatch). */
 const LOGISTICS_COORDINATOR_NAV = [
-  { id: 'map', label: 'Live Map', icon: Car },
+  { id: 'map', label: 'Live map', icon: Car },
   { id: 'rides', label: 'Trips', icon: Navigation },
-  { id: 'vehicles', label: 'Fleet Inventory', icon: Truck },
-  { id: 'workers', label: 'Staff & drivers', icon: UserCheck },
-  { id: 'drivers', label: 'Driver shifts', icon: Users },
+  { id: 'vehicles', label: 'Vehicles', icon: Truck },
+  { id: 'drivers', label: 'Drivers', icon: Users },
   { id: 'accidents', label: 'Accidents', icon: AlertTriangle },
   { id: 'expenses', label: 'Expenses', icon: DollarSign }
 ];
 
-/** Role 4 — dispatch & live map only (fleet registration stays with Logistics Coordinator). */
+/** Role 4 — dispatch & monitoring only (no fleet registration). */
 const MOVEMENT_CENTER_NAV = [
-  { id: 'dispatch', label: 'Movement center', icon: Compass },
+  { id: 'dispatch', label: 'Dispatch', icon: Compass },
   { id: 'map', label: 'Live map', icon: Car }
 ];
 
@@ -65,8 +64,8 @@ export const PORTAL_NAV_BY_ROLE = {
   MASTER_PERSON: [
     { id: 'overview', label: 'Overview', icon: UserCheck },
     { id: 'rides', label: 'Trips', icon: Car },
-    { id: 'workers', label: 'Project workers', icon: Users },
-    { id: 'fleet', label: 'Fleet', icon: Truck },
+    { id: 'workers', label: 'Workers & staff', icon: Users },
+    { id: 'fleet', label: 'Fleet (view)', icon: Truck },
     { id: 'accidents', label: 'Accidents', icon: AlertTriangle },
     { id: 'personal-fuel', label: 'Personal Fuel', icon: DollarSign }
   ],

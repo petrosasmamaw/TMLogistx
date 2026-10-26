@@ -1,10 +1,12 @@
-import React, { useEffect } from 'react';
-import { X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { X, KeyRound } from 'lucide-react';
+import AccountSheet from '../account/AccountSheet.jsx';
 import { usePortalNav } from '../../context/PortalNavContext.jsx';
 import { getPortalNavItems } from '../../constants/portalNav.js';
 import { roleLabel } from '../../constants/roles.js';
 
 export default function MobileNavSheet({ open, onClose, role, user, onLogout }) {
+  const [accountOpen, setAccountOpen] = useState(false);
   const { section, setSection } = usePortalNav();
   const navItems = getPortalNavItems(role);
   const accountRole = roleLabel(role || user?.role);
@@ -72,6 +74,17 @@ export default function MobileNavSheet({ open, onClose, role, user, onLogout }) 
             type="button"
             onClick={() => {
               onClose();
+              setAccountOpen(true);
+            }}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border border-brand-200 text-sm font-semibold text-brand-700 bg-brand-50"
+          >
+            <KeyRound className="w-4 h-4" />
+            Account & password
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
               onLogout();
             }}
             className="w-full py-3 rounded-2xl border border-slate-200 text-sm font-semibold text-slate-700 bg-white"
@@ -80,6 +93,7 @@ export default function MobileNavSheet({ open, onClose, role, user, onLogout }) 
           </button>
         </div>
       </div>
+      <AccountSheet open={accountOpen} onClose={() => setAccountOpen(false)} user={user} />
     </div>
   );
 }

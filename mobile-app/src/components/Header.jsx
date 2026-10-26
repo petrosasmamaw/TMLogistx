@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { colors } from '../theme/colors';
@@ -7,10 +7,10 @@ import { useTranslation } from '../i18n';
 import { logoutUser } from '../store/authSlice';
 import BrandLogo from './BrandLogo';
 
-export const Header = () => {
+export const Header = ({ onOpenProfile }) => {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
-  const { t, language, toggleLanguage } = useTranslation();
+  const { t } = useTranslation();
 
   return (
     <View style={styles.headerContainer}>
@@ -19,23 +19,31 @@ export const Header = () => {
         <View style={styles.brandText}>
           <Text style={styles.brandTitle}>{t('appTitle')}</Text>
           <Text style={styles.brandSubtitle} numberOfLines={1}>
-            {user?.full_name || (language === 'am' ? 'የተሽከርካሪ እና ሰራተኛ እንቅስቃሴ' : 'Fleet & Movement')}
+            {user?.full_name || 'Fleet & Movement'}
           </Text>
         </View>
       </View>
 
-      <View style={styles.actionsSection}>
-        <TouchableOpacity style={styles.langBtn} onPress={toggleLanguage} activeOpacity={0.8}>
-          <Ionicons name="language-outline" size={16} color={colors.primary} />
-          <Text style={styles.langBtnText}>{language === 'en' ? 'አማርኛ' : 'EN'}</Text>
+      <View style={styles.actions}>
+        <TouchableOpacity
+          style={styles.iconBtn}
+          onPress={onOpenProfile}
+          activeOpacity={0.8}
+          accessibilityLabel="Profile"
+        >
+          {user?.avatar_url ? (
+            <Image source={{ uri: user.avatar_url }} style={styles.headerAvatar} />
+          ) : (
+            <Ionicons name="person-circle-outline" size={26} color={colors.primary} />
+          )}
         </TouchableOpacity>
-
         <TouchableOpacity
           style={styles.logoutBtn}
           onPress={() => dispatch(logoutUser())}
           activeOpacity={0.8}
+          accessibilityLabel="Sign out"
         >
-          <Ionicons name="log-out-outline" size={18} color={colors.primary} />
+          <Ionicons name="log-out-outline" size={20} color={colors.primary} />
         </TouchableOpacity>
       </View>
     </View>
@@ -48,58 +56,41 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.borderPrimary,
     paddingHorizontal: 16,
-    paddingTop: 48,
-    paddingBottom: 12,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'space-between'
   },
   brandingSection: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     flex: 1,
-    minWidth: 0,
+    minWidth: 0
   },
   brandText: {
     flex: 1,
-    minWidth: 0,
+    minWidth: 0
   },
   brandTitle: {
     color: colors.textPrimary,
     fontSize: 17,
-    fontWeight: '700',
+    fontWeight: '700'
   },
   brandSubtitle: {
     color: colors.textMuted,
     fontSize: 11,
-    fontWeight: '500',
+    fontWeight: '500'
   },
-  actionsSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  langBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: colors.bgTertiary,
-  },
-  langBtnText: {
-    color: colors.primary,
-    fontSize: 12,
-    fontWeight: '600',
-  },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  iconBtn: { padding: 4 },
+  headerAvatar: { width: 30, height: 30, borderRadius: 15 },
   logoutBtn: {
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: colors.primaryMuted,
-  },
+    backgroundColor: colors.primaryMuted
+  }
 });
 
 export default Header;

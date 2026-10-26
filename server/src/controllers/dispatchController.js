@@ -1,8 +1,13 @@
 import { v4 as uuidv4 } from 'uuid';
-import { getStore } from '../db/connection.js';
+import { getStore, queueStoreSave } from '../db/connection.js';
 import { logAudit } from '../middleware/audit.js';
 import { calculateEta, calculateDistanceKm, estimateDrivingDurationMins } from '../utils/geo.js';
 import { emitToProject } from '../socket.js';
+import {
+  enrichAssignmentForMobile,
+  buildTripStatusSocketPayload
+} from '../utils/enrichAssignmentForMobile.js';
+import { enrichMovementRequest } from '../utils/mobileTripMapper.js';
 import { computeDriverPerformance, vehicleStatusLabel } from '../utils/driverStats.js';
 
 /**
@@ -304,6 +309,7 @@ export async function assignVehicle(req, res, next) {
       created_at: new Date()
     };
     store.vehicle_schedules.push(scheduleLock);
+    queueStoreSave();
 
     // Audit log
     await logAudit({
@@ -323,11 +329,16 @@ export async function assignVehicle(req, res, next) {
     // Notify Staff and Driver via WebSockets
     try {
       const driverUser = store.users.find(u => u.id === driver.user_id);
+      const enrichedRequest = enrichMovementRequest(store, request);
       emitToProject(request.project_id, 'trip_assigned', {
-        assignment: newAssignment,
+        requestId: request.id,
+        newStatus: newAssignment.status,
+        assignment: enrichAssignmentForMobile(store, newAssignment),
+        request: enrichedRequest,
         requestCode: request.request_code,
         vehiclePlate: vehicle.plate_number,
-        driverName: driverUser?.full_name
+        driverName: driverUser?.full_name,
+        notifyUserIds: [request.staff_id, driver.user_id, req.user.userId].filter(Boolean)
       });
     } catch (socketErr) {
       // non-fatal
@@ -511,12 +522,15 @@ export async function reassignTrip(req, res, next) {
     });
 
     try {
-      emitToProject(assignment.project_id, 'trip_reassigned', {
-        assignmentId: assignment.id,
-        vehicleId: assignment.vehicle_id,
-        driverId: assignment.driver_id,
-        reason
-      });
+      emitToProject(
+        assignment.project_id,
+        'trip_reassigned',
+        buildTripStatusSocketPayload(store, assignment, assignment.status, {
+          vehicleId: assignment.vehicle_id,
+          driverId: assignment.driver_id,
+          reason
+        })
+      );
     } catch (e) {}
 
     res.json({
@@ -907,40 +921,6 @@ export async function completeExternalRide(req, res, next) {
   }
 }
 
-function enrichAssignmentForMobile(store, assignment) {
-  const request = store.movement_requests.find((r) => r.id === assignment.request_id);
-  const vehicle = store.vehicles.find((v) => v.id === assignment.vehicle_id);
-  const driver = store.drivers.find((d) => d.id === assignment.driver_id);
-  const driverUser = driver ? store.users.find((u) => u.id === driver.user_id) : null;
-  const staffUser = request ? store.users.find((u) => u.id === request.staff_id) : null;
-
-  return {
-    ...assignment,
-    request,
-    staff: staffUser
-      ? { id: staffUser.id, full_name: staffUser.full_name, phone_number: staffUser.phone_number }
-      : null,
-    vehicle: vehicle
-      ? {
-          id: vehicle.id,
-          plate_number: vehicle.plate_number,
-          make: vehicle.make,
-          model: vehicle.model,
-          current_lat: vehicle.current_lat,
-          current_lng: vehicle.current_lng
-        }
-      : null,
-    driver: driver
-      ? {
-          id: driver.id,
-          user_id: driver.user_id,
-          full_name: driverUser?.full_name,
-          phone_number: driverUser?.phone_number
-        }
-      : null
-  };
-}
-
 /** Driver mobile: performance KPIs and completed movement log (real trip data) */
 export async function getDriverStats(req, res, next) {
   try {
@@ -995,6 +975,16 @@ export async function acceptDriverAssignment(req, res, next) {
     }
     assignment.status = 'ACCEPTED';
     assignment.updated_at = new Date();
+    queueStoreSave();
+    try {
+      emitToProject(assignment.project_id, 'trip_status_changed', buildTripStatusSocketPayload(
+        store,
+        assignment,
+        'ACCEPTED'
+      ));
+    } catch {
+      /* non-fatal */
+    }
     res.json({ success: true, data: enrichAssignmentForMobile(store, assignment) });
   } catch (err) {
     next(err);
@@ -1105,10 +1095,14 @@ export async function startFleetTripMeter(req, res, next) {
     request.status = 'IN_TRANSIT';
     request.updated_at = new Date();
 
-    emitToProject(request.project_id, 'fleet_trip_started', {
-      requestId: request.id,
-      assignmentId: assignment.id
-    });
+    queueStoreSave();
+    emitToProject(
+      request.project_id,
+      'fleet_trip_started',
+      buildTripStatusSocketPayload(store, assignment, 'IN_TRANSIT', {
+        requestId: request.id
+      })
+    );
 
     res.json({ success: true, message: 'Trip distance counter started', data: { request, assignment } });
   } catch (err) {

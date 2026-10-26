@@ -91,7 +91,10 @@ export default function MasterView() {
       subtitle: 'Your assigned project scope (no platform-wide policies). Switch city/site to focus operations.'
     },
     rides: { title: 'Trips', subtitle: 'All movement requests in your project scope.' },
-    fleet: { title: 'Fleet', subtitle: 'Vehicles and drivers for the selected project and site.' },
+    fleet: {
+      title: 'Fleet (view only)',
+      subtitle: 'Read-only vehicle list. Register vehicles and drivers under Logistics Coordinator.'
+    },
     'personal-fuel': { title: 'Personal fuel', subtitle: 'Staff personal-use fuel recoveries.' }
   };
 

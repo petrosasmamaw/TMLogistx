@@ -1,30 +1,44 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Linking,
   Alert,
-  Platform
+  AppState
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
-import { updateTripStatus, clearActiveTrip } from '../store/tripSlice';
+import {
+  updateTripStatus,
+  clearActiveTrip,
+  upsertDriverAssignment,
+  refreshDriverAssignments,
+  removeDriverAssignment,
+  bumpDriverStats
+} from '../store/tripSlice';
+import { mapDriverAssignmentToMobile } from '../utils/mapApiTrip';
+import { pickHigherDriverStatus } from '../utils/driverTripStatus';
 import { colors } from '../theme/colors';
 import { useTranslation } from '../i18n';
 import StatusBadge from '../components/StatusBadge';
 import DriverThreeStepStepper from '../components/DriverThreeStepStepper';
-import MiniMapPreview from '../components/MiniMapPreview';
+import TripLiveMap from '../components/TripLiveMap';
 import IncidentModal from '../components/IncidentModal';
 import AnimatedTripCard from '../components/AnimatedTripCard';
 import { formatDistanceDisplay } from '../utils/geo';
 import apiClient from '../api/client';
+import { DriverActiveTripSkeleton } from '../components/Skeleton';
+import TripContactCard from '../components/TripContactCard';
 
 function nextAction(status) {
-  if (status === 'ACCEPTED') return { key: 'ARRIVED', label: '1. Arrived at pickup' };
-  if (status === 'ARRIVED') return { key: 'IN_TRANSIT', label: '2. Start trip' };
-  if (status === 'IN_TRANSIT' || status === 'PASSENGER_PICKED_UP') {
+  const s = String(status || '').toUpperCase();
+  if (s === 'ASSIGNED') return null;
+  if (['ACCEPTED', 'HEADING_TO_PICKUP'].includes(s)) {
+    return { key: 'ARRIVED', label: '1. Arrived at pickup' };
+  }
+  if (s === 'ARRIVED') return { key: 'IN_TRANSIT', label: '2. Start trip' };
+  if (s === 'IN_TRANSIT' || s === 'PASSENGER_PICKED_UP') {
     return { key: 'COMPLETED', label: '3. End trip' };
   }
   return null;
@@ -34,44 +48,98 @@ export const DriverActiveTripScreen = ({ onNavigateToAssigned }) => {
   const dispatch = useDispatch();
   const { t } = useTranslation();
   const activeTrip = useSelector((state) => state.trips.activeTrip);
+  const driverLoading = useSelector((state) => state.trips.driverLoading);
+  const hasLoadedDriver = useSelector((state) => state.trips.hasLoadedDriverAssignments);
   const gps = useSelector((state) => state.gps);
   const user = useSelector((state) => state.auth.user);
 
   const [incidentModalVisible, setIncidentModalVisible] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [pendingStep, setPendingStep] = useState(null);
 
-  const handleLaunchNavigation = () => {
-    if (!activeTrip) return;
-    const dest = encodeURIComponent(activeTrip.destination_location || activeTrip.pickup_location || '');
-    const url = Platform.select({
-      ios: `maps:0,0?q=${dest}`,
-      android: `geo:0,0?q=${dest}`,
-      default: `https://www.google.com/maps/search/?api=1&query=${dest}`
-    });
-    Linking.openURL(url).catch(() => {});
+  const stepPendingLabel = (step) => {
+    if (step === 'ARRIVED') return 'Arriving…';
+    if (step === 'IN_TRANSIT') return 'Starting…';
+    if (step === 'COMPLETED') return 'Ending…';
+    return 'Updating…';
   };
+
+  useEffect(() => {
+    let lastSync = 0;
+    const syncAssignments = () => {
+      const now = Date.now();
+      if (now - lastSync < 30000) return;
+      lastSync = now;
+      dispatch(refreshDriverAssignments({ silent: true }));
+    };
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') syncAssignments();
+    });
+    return () => sub.remove();
+  }, [dispatch]);
 
   const handleStatusTransition = async (nextStatus) => {
     if (!activeTrip) return;
     const tripKey = activeTrip.assignment_id || activeTrip.id;
+    const lat = gps.currentLocation?.latitude;
+    const lng = gps.currentLocation?.longitude;
+
+    setPendingStep(nextStatus);
+    const optimistic = pickHigherDriverStatus(activeTrip.status, nextStatus);
+    dispatch(
+      updateTripStatus({
+        tripId: tripKey,
+        status: optimistic,
+        holdActive: nextStatus === 'COMPLETED'
+      })
+    );
 
     setUpdatingStatus(true);
     try {
-      await apiClient.updateTripStatus(tripKey, nextStatus, {
-        notes: `Driver step: ${nextStatus}`
-      });
-      dispatch(updateTripStatus({ tripId: activeTrip.id, status: nextStatus }));
+      const options = { notes: `Driver step: ${nextStatus}` };
+      if (nextStatus === 'IN_TRANSIT' && lat != null && lng != null) {
+        options.drive_start_lat = lat;
+        options.drive_start_lng = lng;
+      }
+      if (nextStatus === 'COMPLETED' && lat != null && lng != null) {
+        options.drive_end_lat = lat;
+        options.drive_end_lng = lng;
+      }
+
+      const res = await apiClient.updateTripStatus(tripKey, nextStatus, options);
+      const row = res?.data;
+      if (!row?.id) {
+        throw new Error('Server did not confirm this step. Check your connection and try again.');
+      }
+      const serverStatus = String(row.status || nextStatus).toUpperCase();
+      if (serverStatus !== String(nextStatus).toUpperCase()) {
+        throw new Error(`Server returned status ${serverStatus} instead of ${nextStatus}.`);
+      }
+
+      const mapped = mapDriverAssignmentToMobile(row);
+      if (mapped) {
+        dispatch(upsertDriverAssignment({ ...mapped, status: serverStatus }));
+      }
 
       if (nextStatus === 'COMPLETED') {
-        Alert.alert('Trip closed', 'This ride is complete and visible to coordinators.');
+        dispatch(removeDriverAssignment(tripKey));
         dispatch(clearActiveTrip());
+        dispatch(bumpDriverStats());
+        await dispatch(refreshDriverAssignments({ silent: true }));
+        Alert.alert('Trip closed', 'This ride is complete and visible to coordinators.');
       }
     } catch (err) {
-      Alert.alert('Update Error', err.message);
+      await dispatch(refreshDriverAssignments({ silent: false })).unwrap().catch(() => {});
+      Alert.alert('Update Error', err.message || 'Could not update trip status');
     } finally {
       setUpdatingStatus(false);
+      setPendingStep(null);
     }
   };
+
+  if (!activeTrip && !hasLoadedDriver && driverLoading) {
+    return <DriverActiveTripSkeleton />;
+  }
 
   if (!activeTrip) {
     return (
@@ -100,6 +168,11 @@ export const DriverActiveTripScreen = ({ onNavigateToAssigned }) => {
   }
 
   const action = nextAction(activeTrip.status);
+  const finishingEnd = updatingStatus && pendingStep === 'COMPLETED';
+  const showStepButton =
+    (action && activeTrip.status !== 'COMPLETED') || finishingEnd;
+  const stepKey = action?.key || pendingStep;
+  const stepLabel = action?.label || '3. End trip';
   const distanceLabel = formatDistanceDisplay(activeTrip);
 
   return (
@@ -116,6 +189,14 @@ export const DriverActiveTripScreen = ({ onNavigateToAssigned }) => {
         </View>
       </AnimatedTripCard>
 
+      <TripContactCard
+        title="Staff passenger"
+        name={activeTrip.staff_name}
+        phone={activeTrip.staff_phone}
+        avatarUrl={activeTrip.staff_avatar_url}
+        subtitle={activeTrip.passenger_count ? `${activeTrip.passenger_count} passenger(s)` : undefined}
+      />
+
       <AnimatedTripCard delay={60}>
         <View style={styles.stepperCard}>
           <Text style={styles.sectionHeading}>Trip progress</Text>
@@ -123,34 +204,37 @@ export const DriverActiveTripScreen = ({ onNavigateToAssigned }) => {
         </View>
       </AnimatedTripCard>
 
-      <MiniMapPreview
-        pickup={activeTrip.pickup_location}
-        destination={activeTrip.destination_location}
-        currentLat={gps.currentLocation.latitude}
-        currentLng={gps.currentLocation.longitude}
+      <TripLiveMap
+        mapSessionKey={activeTrip.assignment_id || activeTrip.id}
+        mode="driver"
+        tripStatus={activeTrip.status}
+        height={280}
+        pickupLat={activeTrip.pickup_latitude}
+        pickupLng={activeTrip.pickup_longitude}
+        destLat={activeTrip.destination_latitude}
+        destLng={activeTrip.destination_longitude}
+        driverLat={gps.currentLocation.latitude}
+        driverLng={gps.currentLocation.longitude}
         speedKmh={gps.currentLocation.speedKmh}
         heading={gps.currentLocation.heading}
         distanceKm={distanceLabel}
       />
 
-      {action && activeTrip.status !== 'COMPLETED' && (
+      {showStepButton && (
         <TouchableOpacity
-          style={styles.primaryBtn}
-          onPress={() => handleStatusTransition(action.key)}
+          style={[styles.primaryBtn, updatingStatus && styles.primaryBtnDisabled]}
+          onPress={() => stepKey && handleStatusTransition(stepKey)}
           disabled={updatingStatus}
         >
-          <Text style={styles.primaryBtnText}>{action.label}</Text>
+          <Text style={styles.primaryBtnText}>
+            {updatingStatus && pendingStep === stepKey ? stepPendingLabel(stepKey) : stepLabel}
+          </Text>
         </TouchableOpacity>
       )}
 
-      <View style={styles.dualActionsRow}>
-        <TouchableOpacity style={styles.navActionBtn} onPress={handleLaunchNavigation}>
-          <Text style={styles.navActionBtnText}>Navigation</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.incidentActionBtn} onPress={() => setIncidentModalVisible(true)}>
-          <Text style={styles.incidentActionBtnText}>Report issue</Text>
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity style={styles.incidentActionBtnFull} onPress={() => setIncidentModalVisible(true)}>
+        <Text style={styles.incidentActionBtnText}>Report issue</Text>
+      </TouchableOpacity>
 
       <IncidentModal
         visible={incidentModalVisible}
@@ -173,50 +257,37 @@ const styles = StyleSheet.create({
     padding: 24
   },
   emptyTitle: { color: colors.textPrimary, fontSize: 18, fontWeight: '800', marginBottom: 6 },
-  emptyDesc: { color: colors.textSecondary, fontSize: 13, textAlign: 'center', marginBottom: 20 },
-  viewAssignedBtn: { backgroundColor: colors.amber, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10 },
-  viewAssignedBtnText: { color: '#000', fontSize: 14, fontWeight: '800' },
+  emptyDesc: { color: colors.textMuted, fontSize: 13, textAlign: 'center', marginBottom: 16 },
+  viewAssignedBtn: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12
+  },
+  viewAssignedBtnText: { color: '#fff', fontWeight: '700' },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  requestNum: { color: colors.textPrimary, fontSize: 18, fontWeight: '800' },
-  vehicleInfo: { color: colors.amber, fontSize: 12, fontWeight: '700', marginTop: 2 },
-  stepperCard: { paddingVertical: 8 },
-  sectionHeading: {
-    color: colors.textMuted,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-    marginBottom: 6,
-    textTransform: 'uppercase'
-  },
+  requestNum: { fontSize: 16, fontWeight: '800', color: colors.textPrimary },
+  vehicleInfo: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
+  stepperCard: { paddingVertical: 4 },
+  sectionHeading: { fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 8 },
   primaryBtn: {
-    backgroundColor: colors.amber,
+    backgroundColor: colors.primary,
     paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: 'center',
-    marginTop: 8
+    marginTop: 16
   },
-  primaryBtnText: { color: '#000', fontSize: 15, fontWeight: '900' },
-  dualActionsRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
-  navActionBtn: {
-    flex: 1,
-    backgroundColor: colors.bgSecondary,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
+  primaryBtnDisabled: { opacity: 0.65 },
+  primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  incidentActionBtnFull: {
+    marginTop: 12,
+    paddingVertical: 14,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.cyan
+    borderColor: colors.border,
+    alignItems: 'center'
   },
-  navActionBtnText: { color: colors.cyanLight, fontSize: 12, fontWeight: '800' },
-  incidentActionBtn: {
-    flex: 1,
-    backgroundColor: colors.dangerMuted,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.danger
-  },
-  incidentActionBtnText: { color: colors.danger, fontSize: 12, fontWeight: '800' }
+  incidentActionBtnText: { color: colors.textMuted, fontWeight: '600' }
 });
 
 export default DriverActiveTripScreen;

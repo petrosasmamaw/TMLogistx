@@ -4,6 +4,61 @@ import { filterBySiteId, getAuthorizedProjectIds, getRequesterProjectId } from '
 import { logAudit } from '../middleware/audit.js';
 import { emitToProject } from '../socket.js';
 import { enrichMovementRequest, mapRequestForMobile } from '../utils/mobileTripMapper.js';
+import { projectPortalUserIds } from '../utils/enrichAssignmentForMobile.js';
+import {
+  resolveMovementShiftBand,
+  movementFormFieldKeys,
+  movementShiftLabel,
+  formatLocalTimeLabel,
+  DROPOFF_WAIT_OPTIONS,
+  MOVEMENT_SHIFT_DAY,
+  combineLocalDateTimeToUtc
+} from '../utils/movementShift.js';
+import { DEFAULT_DAY_SHIFT_START, DEFAULT_DAY_SHIFT_END } from '../constants/countryShiftDefaults.js';
+
+function getProjectCountry(store, projectId) {
+  const project = store.projects.find((p) => p.id === projectId);
+  if (!project?.country_id) return null;
+  return store.countries.find((c) => c.id === project.country_id) || null;
+}
+
+export async function getRequestFormContext(req, res, next) {
+  try {
+    const store = getStore();
+    const staffUser = store.users.find((u) => u.id === req.user.userId);
+    const projectId =
+      req.query.project_id ||
+      req.user.projectId ||
+      req.user.project_id ||
+      staffUser?.project_id ||
+      null;
+    const country = projectId ? getProjectCountry(store, projectId) : null;
+    const at = new Date();
+    const movement_shift_band = resolveMovementShiftBand(country, at);
+
+    res.json({
+      success: true,
+      movement_shift_band,
+      movement_shift_label: movementShiftLabel(movement_shift_band),
+      form_fields: movementFormFieldKeys(movement_shift_band),
+      dropoff_wait_options: DROPOFF_WAIT_OPTIONS,
+      country: country
+        ? {
+            id: country.id,
+            name: country.name,
+            code: country.code,
+            timezone: country.timezone || 'UTC',
+            day_shift_start: country.day_shift_start || DEFAULT_DAY_SHIFT_START,
+            day_shift_end: country.day_shift_end || DEFAULT_DAY_SHIFT_END,
+            weekend_days: country.weekend_days || [6, 0]
+          }
+        : null,
+      local_time_label: formatLocalTimeLabel(at, country?.timezone || 'UTC')
+    });
+  } catch (err) {
+    next(err);
+  }
+}
 
 export async function getMyRequests(req, res, next) {
   try {
@@ -147,7 +202,12 @@ export async function createRequest(req, res, next) {
       project_id,
       pickup_location_source,
       destination_location_source,
-      map_estimated_distance_km
+      map_estimated_distance_km,
+      departure_datetime,
+      departure_date,
+      departure_time,
+      dropoff_or_wait_proposal,
+      movement_shift_band: clientShiftBand
     } = req.body;
 
     const finalPickupAddress = (pickup_address || req.body.pickup_location || '').trim();
@@ -156,20 +216,83 @@ export async function createRequest(req, res, next) {
     const finalPickupLng = pickup_lng !== undefined ? pickup_lng : req.body.pickup_longitude;
     const finalDestLat = destination_lat !== undefined ? destination_lat : req.body.destination_latitude;
     const finalDestLng = destination_lng !== undefined ? destination_lng : req.body.destination_longitude;
-    const finalDatetime = requested_datetime || req.body.pickup_datetime || req.body.scheduled_pickup_time || new Date().toISOString();
-
-    if (!finalPickupAddress || finalPickupLat == null || finalPickupLng == null ||
-        !finalDestAddress || finalDestLat == null || finalDestLng == null ||
-        !purpose) {
+    const storeEarly = getStore();
+    const staffUserEarly = storeEarly.users.find((u) => u.id === req.user.userId);
+    const targetProjectIdEarly =
+      project_id ||
+      staffUserEarly?.project_id ||
+      req.user.projectId ||
+      req.user.project_id ||
+      null;
+    if (!targetProjectIdEarly) {
       return res.status(400).json({
         success: false,
-        error: 'pickup_address, pickup coordinates, destination_address, destination coordinates, and purpose are required'
+        error: 'project_id is required — staff profile has no project assigned'
+      });
+    }
+    const countryEarly = getProjectCountry(storeEarly, targetProjectIdEarly);
+    const tz = countryEarly?.timezone || 'UTC';
+
+    let finalDatetime =
+      departure_datetime ||
+      requested_datetime ||
+      req.body.pickup_datetime ||
+      req.body.scheduled_pickup_time ||
+      null;
+
+    if (!finalDatetime && departure_date && departure_time) {
+      finalDatetime = combineLocalDateTimeToUtc(departure_date, departure_time, tz);
+    }
+    if (!finalDatetime) {
+      finalDatetime = new Date().toISOString();
+    }
+
+    const pickupSrcEarly = String(pickup_location_source || 'gps').toLowerCase();
+    const destSrcEarly = String(destination_location_source || 'manual').toLowerCase();
+    const pickupNeedsCoords = !['manual'].includes(pickupSrcEarly);
+    const destNeedsCoords = destSrcEarly !== 'manual';
+
+    const movement_shift_band =
+      clientShiftBand || resolveMovementShiftBand(countryEarly, new Date());
+
+    const formFields = movementFormFieldKeys(movement_shift_band);
+    const dropoffProposal = String(dropoff_or_wait_proposal || 'DROP_OFF').trim().toUpperCase();
+    const validDropoff = DROPOFF_WAIT_OPTIONS.some((o) => o.value === dropoffProposal);
+
+    if (!finalPickupAddress || !finalDestAddress) {
+      return res.status(400).json({
+        success: false,
+        error: 'pickup_address and destination_address are required'
+      });
+    }
+    if (formFields.includes('dropoff_or_wait') && !validDropoff) {
+      return res.status(400).json({
+        success: false,
+        error: 'dropoff_or_wait_proposal is required (DROP_OFF, WAIT, or DROP_OFF_AND_WAIT)'
+      });
+    }
+    if (movement_shift_band === MOVEMENT_SHIFT_DAY && !String(purpose || '').trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'purpose is required during day shift'
+      });
+    }
+    if (pickupNeedsCoords && (finalPickupLat == null || finalPickupLng == null)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Pickup coordinates are required unless pickup is entered manually (text only).'
+      });
+    }
+    if (destNeedsCoords && (finalDestLat == null || finalDestLng == null)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Destination coordinates are required unless destination is entered manually (text only).'
       });
     }
 
-    const targetProjectId = project_id || req.user.projectId || req.user.project_id || 'proj-eth-a';
+    const targetProjectId = targetProjectIdEarly;
 
-    const store = getStore();
+    const store = storeEarly;
 
     // Generate human-friendly sequential request code: REQ-YYYY-XXXX
     const currentYear = new Date().getFullYear();
@@ -198,14 +321,16 @@ export async function createRequest(req, res, next) {
       project_id: targetProjectId,
       staff_id: req.user.userId,
       pickup_address: finalPickupAddress,
-      pickup_lat: parseFloat(finalPickupLat),
-      pickup_lng: parseFloat(finalPickupLng),
+      pickup_lat: finalPickupLat != null ? parseFloat(finalPickupLat) : null,
+      pickup_lng: finalPickupLng != null ? parseFloat(finalPickupLng) : null,
       destination_address: finalDestAddress,
-      destination_lat: parseFloat(finalDestLat),
-      destination_lng: parseFloat(finalDestLng),
+      destination_lat: finalDestLat != null ? parseFloat(finalDestLat) : null,
+      destination_lng: finalDestLng != null ? parseFloat(finalDestLng) : null,
       requested_datetime: new Date(finalDatetime),
       passenger_count: parseInt(passengers_count ?? passenger_count, 10) || 1,
-      purpose: purpose.trim(),
+      purpose: String(purpose || '').trim() || null,
+      dropoff_or_wait_proposal: dropoffProposal,
+      movement_shift_band,
       special_instructions: special_instructions.trim(),
       trip_category: chosenCategory,
       pickup_location_source: pickupSrc,
@@ -234,19 +359,24 @@ export async function createRequest(req, res, next) {
       ipAddress: req.ip || '127.0.0.1'
     });
 
-    // Real-Time Notification via Socket.io to Movement Officers
+    queueStoreSave();
+
+    const enriched = enrichMovementRequest(store, newRequest);
+    const staffUser = store.users.find((u) => u.id === req.user.userId);
+
     try {
       emitToProject(targetProjectId, 'new_movement_request', {
-        request: newRequest,
-        staffName: req.user.fullName || 'Staff Member'
+        request: enriched,
+        staffName: staffUser?.full_name || req.user.fullName || 'Staff member',
+        projectId: targetProjectId,
+        notifyUserIds: [
+          ...projectPortalUserIds(store, targetProjectId),
+          req.user.userId
+        ]
       });
     } catch (socketErr) {
       // non-fatal
     }
-
-    queueStoreSave();
-
-    const enriched = enrichMovementRequest(store, newRequest);
     res.status(201).json({
       success: true,
       message: 'Movement request submitted successfully',

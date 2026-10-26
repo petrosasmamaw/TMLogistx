@@ -69,8 +69,14 @@ export const apiClient = {
         '/accidents',
         '/fuel'
       ];
-      const isRead = !options.method || options.method === 'GET';
-      if (currentToken && isRead && readEndpoints.some((p) => endpoint === p || endpoint.startsWith(`${p}?`))) {
+      const method = String(options.method || 'GET').toUpperCase();
+      const isRead = method === 'GET';
+      const isAuthRead =
+        currentToken &&
+        isRead &&
+        readEndpoints.some((p) => endpoint === p || endpoint.startsWith(`${p}?`));
+      const isAuthWrite = currentToken && !isRead && !endpoint.startsWith('/auth/');
+      if (isAuthRead || isAuthWrite) {
         throw networkError;
       }
       console.warn(`[TMLogistx Mobile Client] API endpoint ${endpoint} unavailable, using intelligent local engine:`, networkError.message);
@@ -222,6 +228,30 @@ export const apiClient = {
     body: JSON.stringify({ email, password })
   }),
 
+  forgotPassword: (email) =>
+    apiClient.request('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email })
+    }),
+
+  resetPassword: (token, newPassword) =>
+    apiClient.request('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, newPassword })
+    }),
+
+  changePassword: (currentPassword, newPassword) =>
+    apiClient.request('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword })
+    }),
+
+  patchProfile: (body) =>
+    apiClient.request('/auth/me', {
+      method: 'PATCH',
+      body: JSON.stringify(body)
+    }),
+
   // Staff Movement Requests
   getMyRequests: async () => {
     const res = await apiClient.request('/requests/my', { method: 'GET' });
@@ -229,6 +259,11 @@ export const apiClient = {
     const requests = raw.map((row) => mapApiRequestToMobile(row)).filter(Boolean);
     return { ...res, requests, count: requests.length };
   },
+  getRequestFormContext: (projectId) => {
+    const q = projectId ? `?project_id=${encodeURIComponent(projectId)}` : '';
+    return apiClient.request(`/requests/form-context${q}`, { method: 'GET' });
+  },
+
   createRequest: async (data) => {
     const res = await apiClient.request('/requests', {
       method: 'POST',

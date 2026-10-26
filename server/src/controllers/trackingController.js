@@ -1,9 +1,23 @@
 import { v4 as uuidv4 } from 'uuid';
-import { getStore } from '../db/connection.js';
+import { getStore, queueStoreSave } from '../db/connection.js';
+import {
+  buildTripStatusSocketPayload,
+  enrichAssignmentForMobile
+} from '../utils/enrichAssignmentForMobile.js';
 import { logAudit } from '../middleware/audit.js';
 import { config } from '../config/index.js';
 import { calculateEta, calculateDistanceKm } from '../utils/geo.js';
+import { resolveDriverVehicleForIncident } from '../utils/driverVehicleResolve.js';
 import { emitToProject, emitToTrip } from '../socket.js';
+
+const ACTIVE_TRIP_STATUSES = [
+  'ASSIGNED',
+  'ACCEPTED',
+  'HEADING_TO_PICKUP',
+  'ARRIVED',
+  'PASSENGER_PICKED_UP',
+  'IN_TRANSIT'
+];
 
 /**
  * Driver GPS Broadcast Endpoint
@@ -25,37 +39,68 @@ export async function updateGpsLocation(req, res, next) {
     }
 
     const store = getStore();
-
-    // Determine target vehicle
-    let targetVehicleId = vehicle_id;
-    if (!targetVehicleId && req.user.role === 'DRIVER') {
-      const driver = store.drivers.find(d => d.user_id === req.user.userId);
-      targetVehicleId = driver?.assigned_vehicle_id;
-    }
-
-    if (!targetVehicleId) {
-      return res.status(400).json({ success: false, error: 'No vehicle associated with this GPS transmission' });
-    }
-
-    const vehicle = store.vehicles.find(v => v.id === targetVehicleId);
-    if (!vehicle) {
-      return res.status(404).json({ success: false, error: 'Vehicle not found' });
-    }
-
     const now = new Date();
-    vehicle.current_lat = parseFloat(latitude);
-    vehicle.current_lng = parseFloat(longitude);
-    vehicle.last_location_update = now;
-    vehicle.updated_at = now;
+    const lat = parseFloat(latitude);
+    const lng = parseFloat(longitude);
 
-    // Determine driver
-    const driver = store.drivers.find(d => d.assigned_vehicle_id === vehicle.id || d.user_id === req.user.userId);
+    const driver =
+      req.user.role === 'DRIVER'
+        ? store.drivers.find((d) => d.user_id === req.user.userId)
+        : store.drivers.find((d) => d.assigned_vehicle_id === vehicle_id);
+
     if (driver) {
-      driver.current_lat = parseFloat(latitude);
-      driver.current_lng = parseFloat(longitude);
+      driver.current_lat = lat;
+      driver.current_lng = lng;
       driver.last_location_update = now;
       driver.updated_at = now;
     }
+
+    let targetVehicleId = vehicle_id;
+    if (!targetVehicleId && driver) {
+      const resolved = resolveDriverVehicleForIncident(store, driver);
+      targetVehicleId = resolved.vehicleId;
+      const activeTrip = store.trip_assignments.find(
+        (t) => t.driver_id === driver.id && ACTIVE_TRIP_STATUSES.includes(t.status)
+      );
+      if (activeTrip?.vehicle_id) {
+        targetVehicleId = activeTrip.vehicle_id;
+      }
+    }
+
+    let vehicle = targetVehicleId ? store.vehicles.find((v) => v.id === targetVehicleId) : null;
+
+    if (!vehicle && driver) {
+      emitToProject(driver.project_id, 'driver_location_updated', {
+        driverId: driver.id,
+        latitude: lat,
+        longitude: lng,
+        speed: parseFloat(speed) || 0,
+        heading: parseFloat(heading) || 0,
+        reportedAt: now
+      });
+      return res.json({
+        success: true,
+        message: 'Driver location recorded (no vehicle linked yet)',
+        data: {
+          driver_id: driver.id,
+          latitude: lat,
+          longitude: lng,
+          last_location_update: now
+        }
+      });
+    }
+
+    if (!vehicle) {
+      return res.status(400).json({
+        success: false,
+        error: 'No vehicle associated with this GPS transmission'
+      });
+    }
+
+    vehicle.current_lat = lat;
+    vehicle.current_lng = lng;
+    vehicle.last_location_update = now;
+    vehicle.updated_at = now;
 
     // Save breadcrumb into gps_logs
     const gpsLog = {
@@ -71,6 +116,10 @@ export async function updateGpsLocation(req, res, next) {
     };
     if (!store.gps_logs) store.gps_logs = [];
     store.gps_logs.push(gpsLog);
+    const maxGpsLogs = 500;
+    if (store.gps_logs.length > maxGpsLogs) {
+      store.gps_logs = store.gps_logs.slice(-maxGpsLogs);
+    }
 
     // If active trip exists, calculate dynamic ETA to pickup or destination
     let tripEta = null;
@@ -121,8 +170,22 @@ export async function updateGpsLocation(req, res, next) {
       heading: gpsLog.heading,
       reportedAt: now,
       driverName: driver ? store.users.find(u => u.id === driver.user_id)?.full_name : null,
+      driverId: driver?.id || null,
       activeTripId: assignment?.id || null
     });
+
+    if (driver) {
+      emitToProject(vehicle.project_id, 'driver_location_updated', {
+        driverId: driver.id,
+        vehicleId: vehicle.id,
+        latitude: lat,
+        longitude: lng,
+        speed: gpsLog.speed,
+        heading: gpsLog.heading,
+        reportedAt: now,
+        availability_status: driver.availability_status
+      });
+    }
 
     res.json({
       success: true,
@@ -342,12 +405,22 @@ export async function updateTripStatus(req, res, next) {
     const vehicle = store.vehicles.find(v => v.id === assignment.vehicle_id);
     const driver = store.drivers.find(d => d.id === assignment.driver_id);
 
+    if (req.user.role === 'DRIVER') {
+      const sessionDriver = store.drivers.find((d) => d.user_id === req.user.userId);
+      if (!sessionDriver || assignment.driver_id !== sessionDriver.id) {
+        return res.status(403).json({ success: false, error: 'This assignment is not assigned to you' });
+      }
+    }
+
     const oldStatus = assignment.status;
     const newStatus = status.toUpperCase();
     const now = new Date();
 
     assignment.status = newStatus;
     assignment.updated_at = now;
+    if (request) {
+      request.updated_at = now;
+    }
     if (notes) assignment.notes = (assignment.notes ? assignment.notes + ' | ' : '') + notes;
 
     // Track timestamps based on pipeline state
@@ -360,6 +433,7 @@ export async function updateTripStatus(req, res, next) {
       assignment.actual_pickup_time = now;
       if (request) request.status = 'IN_TRANSIT';
     } else if (newStatus === 'IN_TRANSIT') {
+      if (!assignment.actual_pickup_time) assignment.actual_pickup_time = now;
       if (request) request.status = 'IN_TRANSIT';
     } else if (newStatus === 'COMPLETED') {
       assignment.actual_completion_time = now;
@@ -451,6 +525,8 @@ export async function updateTripStatus(req, res, next) {
       if (driver) driver.availability_status = 'AVAILABLE';
     }
 
+    queueStoreSave();
+
     await logAudit({
       userId: req.user.userId,
       action: 'TRIP_STATUS_UPDATED',
@@ -462,25 +538,20 @@ export async function updateTripStatus(req, res, next) {
       ipAddress: req.ip || '127.0.0.1'
     });
 
-    // Notify trip room and project room
-    emitToTrip(assignment.id, 'trip_status_changed', {
-      assignmentId: assignment.id,
+    const statusPayload = buildTripStatusSocketPayload(store, assignment, newStatus, {
       oldStatus,
-      newStatus,
+      vehicleId: vehicle?.id,
       updatedAt: now
     });
 
-    emitToProject(assignment.project_id, 'trip_status_changed', {
-      assignmentId: assignment.id,
-      vehicleId: vehicle?.id,
-      newStatus,
-      updatedAt: now
-    });
+    emitToTrip(assignment.id, 'trip_status_changed', statusPayload);
+    emitToProject(assignment.project_id, 'trip_status_changed', statusPayload);
 
     res.json({
       success: true,
       message: `Trip status updated to '${newStatus}'`,
-      data: assignment
+      data: enrichAssignmentForMobile(store, assignment),
+      request_status: request?.status || null
     });
   } catch (err) {
     next(err);

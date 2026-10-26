@@ -36,7 +36,9 @@ export function enrichMovementRequest(store, reqItem) {
             full_name: driverUser?.full_name,
             phone_number: driverUser?.phone_number,
             rating: driver.rating || 5.0,
-            avatar_url: driverUser?.avatar_url || null
+            avatar_url: driverUser?.avatar_url || null,
+            current_lat: driver.current_lat ?? vehicle?.current_lat ?? null,
+            current_lng: driver.current_lng ?? vehicle?.current_lng ?? null
           }
         : null,
       estimated_pickup_time: assignment.estimated_pickup_time,
@@ -60,7 +62,8 @@ export function enrichMovementRequest(store, reqItem) {
           id: staffUser.id,
           full_name: staffUser.full_name,
           phone_number: staffUser.phone_number,
-          email: staffUser.email
+          email: staffUser.email,
+          avatar_url: staffUser.avatar_url || null
         }
       : null,
     project_name: project?.name,
@@ -78,20 +81,32 @@ export function enrichMovementRequest(store, reqItem) {
   };
 }
 
+function resolveMobileTripStatus(requestStatus, assignmentStatus) {
+  const req = String(requestStatus || '').toUpperCase();
+  const asn = String(assignmentStatus || '').toUpperCase();
+  const terminal = new Set(['COMPLETED', 'CANCELLED', 'REJECTED']);
+  if (terminal.has(req)) return req;
+  if (terminal.has(asn)) return asn;
+  if (req === 'EXTERNAL_AUTHORIZED') return req;
+  const order = [
+    'PENDING',
+    'ASSIGNED',
+    'ACCEPTED',
+    'HEADING_TO_PICKUP',
+    'ARRIVED',
+    'IN_TRANSIT',
+    'PASSENGER_PICKED_UP',
+    'COMPLETED'
+  ];
+  const ri = order.indexOf(req);
+  const ai = order.indexOf(asn);
+  if (ai >= 0 && (ri < 0 || ai > ri)) return asn;
+  return req || asn || 'PENDING';
+}
+
 export function mapRequestForMobile(enriched) {
   const a = enriched.assignment;
-  const requestStatus = enriched.status;
-
-  let status = requestStatus;
-  if (requestStatus === 'EXTERNAL_AUTHORIZED') {
-    status = 'EXTERNAL_AUTHORIZED';
-  } else if (requestStatus === 'IN_TRANSIT' || requestStatus === 'COMPLETED') {
-    status = requestStatus;
-  } else if (requestStatus === 'PENDING' || requestStatus === 'ASSIGNED' || requestStatus === 'CANCELLED' || requestStatus === 'REJECTED') {
-    status = requestStatus;
-  } else if (a?.status && !['ASSIGNED'].includes(a.status)) {
-    status = a.status;
-  }
+  const status = resolveMobileTripStatus(enriched.status, a?.status);
 
   const externalFromRequest = {
     external_authorized: Boolean(enriched.external_authorized),
@@ -128,6 +143,8 @@ export function mapRequestForMobile(enriched) {
     destination_longitude: enriched.destination_lng,
     pickup_datetime: enriched.requested_datetime,
     purpose: enriched.purpose,
+    movement_shift_band: enriched.movement_shift_band || null,
+    dropoff_or_wait_proposal: enriched.dropoff_or_wait_proposal || null,
     trip_category: enriched.trip_category,
     status,
     assignment_id: a?.id,
@@ -137,6 +154,12 @@ export function mapRequestForMobile(enriched) {
     assigned_driver_id: a?.driver?.id,
     assigned_driver_name: a?.driver?.full_name,
     assigned_driver_phone: a?.driver?.phone_number,
+    assigned_driver_avatar_url: a?.driver?.avatar_url || null,
+    staff_name: enriched.staff?.full_name || null,
+    staff_phone: enriched.staff?.phone_number || null,
+    staff_avatar_url: enriched.staff?.avatar_url || null,
+    assigned_driver_latitude: a?.driver?.current_lat ?? a?.vehicle?.current_lat ?? null,
+    assigned_driver_longitude: a?.driver?.current_lng ?? a?.vehicle?.current_lng ?? null,
     staff_meter_started: !!a?.staff_meter_started_at,
     staff_meter_ended: !!a?.staff_meter_ended_at,
     actual_distance_km: a?.actual_distance_km,

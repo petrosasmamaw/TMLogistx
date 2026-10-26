@@ -79,7 +79,7 @@ export async function ensureStoreReady() {
         } else {
           const file = loadPersistedStore();
           if (file) applyPersistedStore(memoryStore, file);
-          await saveSnapshotToPg(pool, memoryStore);
+          await saveSnapshotToPg(pool, memoryStore, { skipRelational: false, mirrorToDisk: false });
           console.log('[Store] Neon initialized from seed/local file. Run npm run db:import after schema changes.');
         }
         await mergeRelationalIntoStore(pool, memoryStore);

@@ -2,12 +2,23 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { Loader2, MapPin, Search } from 'lucide-react';
+import {
+  getMapboxAccessToken,
+  getMapboxLeafletTileConfig,
+  mapboxDrivingRoute,
+  mapboxForwardGeocode
+} from '../utils/mapbox.js';
+import {
+  CITY_MAP_ZOOM,
+  FALLBACK_MAP_CENTER,
+  FALLBACK_MAP_LABEL
+} from '../utils/projectMapFocus.js';
 
-const GEOAPIFY_KEY = import.meta.env.VITE_GEOAPIFY_API_KEY || '61c689f487934d369f1b58ee421ef8d3';
+const MAPBOX_TOKEN = getMapboxAccessToken();
 
-const DEFAULT_CENTER = [9.02, 38.75]; // Addis Ababa
-const DEFAULT_CITY_LABEL = 'Addis Ababa';
-const CITY_ZOOM = 12;
+const DEFAULT_CENTER = FALLBACK_MAP_CENTER;
+const DEFAULT_CITY_LABEL = FALLBACK_MAP_LABEL;
+const CITY_ZOOM = CITY_MAP_ZOOM;
 
 function distanceKm(lat1, lon1, lat2, lon2) {
   if ([lat1, lon1, lat2, lon2].some((v) => v == null)) return null;
@@ -47,21 +58,26 @@ function createVehicleIcon(status, isStale) {
   });
 }
 
-function createDriverIcon(status = 'AVAILABLE') {
+function createDriverIcon(status = 'AVAILABLE', highlighted = false) {
   const busy = status === 'ON_TRIP' || status === 'BUSY';
-  const color = busy ? '#7c3aed' : '#0891b2';
+  const color = highlighted ? '#dc2626' : busy ? '#7c3aed' : '#0891b2';
+  const ring = highlighted
+    ? '<circle cx="16" cy="16" r="15" fill="none" stroke="#dc2626" stroke-width="3" stroke-opacity="0.85"/>'
+    : '';
   const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="34" height="34">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="${highlighted ? 40 : 34}" height="${highlighted ? 40 : 34}">
+      ${ring}
       <circle cx="16" cy="16" r="14" fill="${color}" fill-opacity="0.3" stroke="${color}" stroke-width="2"/>
       <circle cx="16" cy="12" r="5" fill="#fff"/>
       <path d="M8 26c0-5 3.5-8 8-8s8 3 8 8" fill="#fff"/>
     </svg>
   `;
+  const size = highlighted ? 40 : 34;
   return L.divIcon({
     html: svg,
     className: 'custom-driver-marker',
-    iconSize: [34, 34],
-    iconAnchor: [17, 17],
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
     popupAnchor: [0, -16]
   });
 }
@@ -119,33 +135,13 @@ function MapCitySearch({ onSelectCity, currentLabel }) {
 
   const fetchSuggestions = useCallback(async (text) => {
     const trimmed = text.trim();
-    if (trimmed.length < 2 || !GEOAPIFY_KEY) {
+    if (trimmed.length < 2 || !MAPBOX_TOKEN) {
       setSuggestions([]);
       return;
     }
     setSearching(true);
     try {
-      const params = new URLSearchParams({
-        text: trimmed,
-        type: 'city',
-        limit: '8',
-        apiKey: GEOAPIFY_KEY,
-      });
-      const res = await fetch(`https://api.geoapify.com/v1/geocode/autocomplete?${params}`);
-      const data = await res.json();
-      const items = (data?.features || [])
-        .map((f) => {
-          const p = f.properties || {};
-          const lat = p.lat ?? f.geometry?.coordinates?.[1];
-          const lon = p.lon ?? f.geometry?.coordinates?.[0];
-          if (lat == null || lon == null) return null;
-          const label =
-            p.formatted ||
-            [p.city, p.state, p.country].filter(Boolean).join(', ') ||
-            trimmed;
-          return { id: f.properties?.place_id || `${lat},${lon}`, lat, lon, label };
-        })
-        .filter(Boolean);
+      const items = await mapboxForwardGeocode(trimmed, { limit: 8, types: 'place,locality,region' });
       setSuggestions(items);
       setOpen(items.length > 0);
     } catch {
@@ -174,27 +170,11 @@ function MapCitySearch({ onSelectCity, currentLabel }) {
 
   const runSearch = async () => {
     const trimmed = query.trim();
-    if (trimmed.length < 2 || !GEOAPIFY_KEY) return;
+    if (trimmed.length < 2 || !MAPBOX_TOKEN) return;
     setSearching(true);
     try {
-      const params = new URLSearchParams({
-        text: trimmed,
-        type: 'city',
-        limit: '1',
-        apiKey: GEOAPIFY_KEY,
-      });
-      const res = await fetch(`https://api.geoapify.com/v1/geocode/search?${params}`);
-      const data = await res.json();
-      const f = data?.features?.[0];
-      if (f) {
-        const p = f.properties || {};
-        const lat = p.lat ?? f.geometry?.coordinates?.[1];
-        const lon = p.lon ?? f.geometry?.coordinates?.[0];
-        if (lat != null && lon != null) {
-          const label = p.formatted || trimmed;
-          pickCity({ lat, lon, label, id: 'search' });
-        }
-      }
+      const items = await mapboxForwardGeocode(trimmed, { limit: 1, types: 'place,locality,region' });
+      if (items[0]) pickCity(items[0]);
     } finally {
       setSearching(false);
     }
@@ -220,7 +200,11 @@ function MapCitySearch({ onSelectCity, currentLabel }) {
               }
               if (e.key === 'Escape') setOpen(false);
             }}
-            placeholder="Search city to focus map…"
+            placeholder={
+              currentLabel
+                ? `Search city (project: ${currentLabel.split(',')[0]})…`
+                : 'Search city to focus map…'
+            }
             className="flex-1 min-w-0 text-sm text-slate-800 placeholder:text-slate-400 bg-transparent outline-none"
             aria-label="Search city"
             autoComplete="off"
@@ -230,7 +214,7 @@ function MapCitySearch({ onSelectCity, currentLabel }) {
         {currentLabel && !open && (
           <div className="px-3 py-1.5 text-[10px] text-slate-500 border-t border-slate-100 flex items-center gap-1 bg-slate-50/90">
             <MapPin className="w-3 h-3" />
-            Map centered on <span className="font-semibold text-slate-700">{currentLabel}</span>
+            Project area: <span className="font-semibold text-slate-700">{currentLabel}</span>
           </div>
         )}
         {open && suggestions.length > 0 && (
@@ -257,17 +241,37 @@ export default function FleetMap({
   vehicles = [],
   drivers = [],
   selectedRequest = null,
+  highlightDriverId = null,
+  highlightVehicleId = null,
   center = DEFAULT_CENTER,
   zoom = CITY_ZOOM,
+  defaultMapView = null,
   height = '460px',
   showCitySearch = true,
 }) {
   const [routeCoordinates, setRouteCoordinates] = useState(null);
   const [routeInfo, setRouteInfo] = useState(null);
-  const [cityCenter, setCityCenter] = useState(center);
-  const [cityZoom, setCityZoom] = useState(zoom);
-  const [cityLabel, setCityLabel] = useState(DEFAULT_CITY_LABEL);
+  const initialCenter = defaultMapView?.center || center;
+  const initialZoom = defaultMapView?.zoom ?? zoom;
+  const initialLabel = defaultMapView?.label || DEFAULT_CITY_LABEL;
+  const [cityCenter, setCityCenter] = useState(initialCenter);
+  const [cityZoom, setCityZoom] = useState(initialZoom);
+  const [cityLabel, setCityLabel] = useState(initialLabel);
   const [viewAnimate, setViewAnimate] = useState(false);
+
+  useEffect(() => {
+    if (!defaultMapView?.center) return;
+    setCityCenter(defaultMapView.center);
+    setCityZoom(defaultMapView.zoom ?? CITY_ZOOM);
+    setCityLabel(defaultMapView.label || DEFAULT_CITY_LABEL);
+    setViewAnimate(true);
+  }, [
+    defaultMapView?.center?.[0],
+    defaultMapView?.center?.[1],
+    defaultMapView?.zoom,
+    defaultMapView?.label,
+    defaultMapView?.source
+  ]);
 
   const handleSelectCity = useCallback((coords, label, z) => {
     setCityCenter(coords);
@@ -279,30 +283,16 @@ export default function FleetMap({
   const pickupCoords = selectedRequest?.pickup_lat ? [selectedRequest.pickup_lat, selectedRequest.pickup_lng] : null;
   const destCoords = selectedRequest?.destination_lat ? [selectedRequest.destination_lat, selectedRequest.destination_lng] : null;
 
-  // Real road routing via Geoapify Routing API
   useEffect(() => {
-    if (pickupCoords && destCoords && GEOAPIFY_KEY) {
-      const url = `https://api.geoapify.com/v1/routing?waypoints=${pickupCoords[0]},${pickupCoords[1]}|${destCoords[0]},${destCoords[1]}&mode=drive&apiKey=${GEOAPIFY_KEY}`;
-      fetch(url)
-        .then(res => res.json())
-        .then(data => {
-          if (data?.features?.[0]?.geometry?.coordinates) {
-            // Geoapify returns [lon, lat], Leaflet polyline expects [lat, lon]
-            const legs = data.features[0].geometry.coordinates;
-            // Handle MultiLineString or LineString
-            let coords = [];
-            if (Array.isArray(legs[0]) && typeof legs[0][0] === 'number') {
-              coords = legs.map(pt => [pt[1], pt[0]]);
-            } else if (Array.isArray(legs[0])) {
-              coords = legs.flat(1).map(pt => [pt[1], pt[0]]);
-            }
-
-            setRouteCoordinates(coords);
-            const prop = data.features[0].properties;
-            setRouteInfo({
-              distanceKm: (prop.distance / 1000).toFixed(1),
-              timeMins: Math.round(prop.time / 60)
-            });
+    if (pickupCoords && destCoords && MAPBOX_TOKEN) {
+      mapboxDrivingRoute(pickupCoords[0], pickupCoords[1], destCoords[0], destCoords[1])
+        .then((route) => {
+          if (route) {
+            setRouteCoordinates(route.coordinates);
+            setRouteInfo({ distanceKm: route.distanceKm, timeMins: route.timeMins });
+          } else {
+            setRouteCoordinates(null);
+            setRouteInfo(null);
           }
         })
         .catch(() => {
@@ -315,8 +305,20 @@ export default function FleetMap({
     }
   }, [pickupCoords?.[0], pickupCoords?.[1], destCoords?.[0], destCoords?.[1]]);
 
-  const mapCenter = pickupCoords || cityCenter || center;
-  const mapZoom = pickupCoords ? 14 : cityZoom;
+  const assignedDriver =
+    highlightDriverId && drivers.find((d) => d.id === highlightDriverId);
+  const assignedVehicle =
+    highlightVehicleId && vehicles.find((v) => v.id === highlightVehicleId);
+
+  const focusCoords =
+    assignedDriver?.latitude != null
+      ? [assignedDriver.latitude, assignedDriver.longitude]
+      : assignedVehicle?.latitude != null
+        ? [assignedVehicle.latitude, assignedVehicle.longitude]
+        : null;
+
+  const mapCenter = focusCoords || pickupCoords || cityCenter || center;
+  const mapZoom = focusCoords || pickupCoords ? 14 : cityZoom;
 
   const refLat = pickupCoords?.[0] ?? mapCenter[0];
   const refLng = pickupCoords?.[1] ?? mapCenter[1];
@@ -329,13 +331,15 @@ export default function FleetMap({
     .sort((a, b) => (a.distance_km ?? 999) - (b.distance_km ?? 999))
     .slice(0, 6);
 
-  // Primary tile URL: Geoapify OSM-Bright (falling back to CartoDB Voyager)
-  const tileUrl = GEOAPIFY_KEY
-    ? `https://maps.geoapify.com/v1/tile/osm-bright/{z}/{x}/{y}.png?apiKey=${GEOAPIFY_KEY}`
-    : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+  const driverDistanceById = Object.fromEntries(
+    rankedDrivers.map((d) => [d.id, d.distance_km])
+  );
+
+  const mapboxTiles = getMapboxLeafletTileConfig();
+  const fallbackTileUrl = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
 
   return (
-    <div className="relative rounded-2xl overflow-hidden border border-slate-200 shadow-2xl" style={{ height }}>
+    <div className="fleet-map-root relative rounded-2xl overflow-hidden border border-slate-200 shadow-2xl" style={{ height }}>
       {showCitySearch && !pickupCoords && (
         <MapCitySearch onSelectCity={handleSelectCity} currentLabel={cityLabel} />
       )}
@@ -347,11 +351,15 @@ export default function FleetMap({
         scrollWheelZoom={true}
       >
         <ChangeView center={mapCenter} zoom={mapZoom} animate={viewAnimate || !!pickupCoords} />
-        {/* Geoapify / CartoDB Tile Layer */}
         <TileLayer
-          attribution='Powered by <a href="https://www.geoapify.com/" target="_blank">Geoapify</a> | &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url={tileUrl}
-          maxZoom={20}
+          attribution={
+            mapboxTiles?.attribution ||
+            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
+          }
+          url={mapboxTiles?.url || fallbackTileUrl}
+          tileSize={mapboxTiles?.tileSize}
+          zoomOffset={mapboxTiles?.zoomOffset}
+          maxZoom={mapboxTiles?.maxZoom || 20}
         />
 
         {/* Vehicles */}
@@ -376,8 +384,8 @@ export default function FleetMap({
                     <div className="mt-1 text-slate-700">Driver: <span className="font-semibold">{v.driver.full_name}</span></div>
                   )}
                   {v.is_stale && (
-                    <div className="mt-1 text-amber-700 font-semibold bg-amber-50 p-1 rounded text-[10px]">
-                      ⚠️ Stale GPS ({v.stale_duration_mins}m ago)
+                    <div className="mt-1 text-amber-800 font-medium bg-amber-50 p-1 rounded text-[10px]">
+                      Stale GPS ({v.stale_duration_mins}m ago)
                     </div>
                   )}
                 </div>
@@ -389,29 +397,37 @@ export default function FleetMap({
         {/* Drivers (live positions) */}
         {drivers.map((d) => {
           if (!d.latitude || !d.longitude) return null;
-          const pos = [d.latitude + 0.00035, d.longitude + 0.00035];
+          const pos = [d.latitude, d.longitude];
+          const isAssigned = highlightDriverId && d.id === highlightDriverId;
           return (
             <Marker
               key={`driver-${d.id}`}
               position={pos}
-              icon={createDriverIcon(d.availability_status)}
-              zIndexOffset={500}
+              icon={createDriverIcon(d.availability_status, isAssigned)}
+              zIndexOffset={isAssigned ? 900 : 500}
             >
               <Popup className="custom-popup">
                 <div className="p-2 text-slate-900 text-xs">
-                  <div className="font-bold text-sm text-violet-700">Driver</div>
+                  <div className="font-bold text-sm text-violet-700">
+                    {isAssigned ? 'Assigned driver (live)' : 'Driver'}
+                  </div>
                   <div className="font-semibold">{d.full_name}</div>
                   {d.vehicle_plate && (
                     <div className="text-slate-600 mt-0.5">Vehicle: {d.vehicle_plate}</div>
                   )}
+                  {driverDistanceById[d.id] != null && (
+                    <div className="text-violet-800 font-semibold mt-1">
+                      {driverDistanceById[d.id]} km from pickup
+                    </div>
+                  )}
                   <div className="text-[10px] text-slate-500 mt-1">{d.availability_status || 'AVAILABLE'}</div>
                   {d.is_approximate && (
-                    <div className="mt-1 text-amber-700 font-semibold bg-amber-50 p-1 rounded text-[10px]">
-                      Approx. position (awaiting GPS ping)
+                    <div className="mt-1 text-amber-800 font-medium bg-amber-50 p-1 rounded text-[10px]">
+                      Approximate position (awaiting GPS)
                     </div>
                   )}
                   {d.phone_number && (
-                    <div className="font-mono text-[10px] mt-1">{d.phone_number}</div>
+                    <div className="font-mono text-[11px] mt-1 text-slate-800">Tel: {d.phone_number}</div>
                   )}
                 </div>
               </Popup>
@@ -446,7 +462,7 @@ export default function FleetMap({
           </Marker>
         )}
 
-        {/* Geoapify Turn-by-Turn Road Route (or straight polyline fallback) */}
+        {/* Mapbox driving route (or straight polyline fallback) */}
         {pickupCoords && destCoords && (
           <Polyline
             positions={routeCoordinates && routeCoordinates.length > 0 ? routeCoordinates : [pickupCoords, destCoords]}
@@ -458,13 +474,12 @@ export default function FleetMap({
         )}
       </MapContainer>
 
-      {/* Geoapify Live Route Badge Overlay */}
       {routeInfo && (
-        <div className="absolute top-3 right-3 z-[1000] glass-panel px-3 py-1.5 rounded-xl text-xs flex items-center gap-2 shadow-lg border border-cyan-500/30">
-          <span className="text-cyan-400 font-bold">🛣️ Geoapify Route:</span>
-          <span className="font-semibold text-slate-200">{routeInfo.distanceKm} km</span>
+        <div className="absolute top-3 right-3 z-[1000] glass-panel px-3 py-1.5 rounded-xl text-xs flex items-center gap-2 shadow-lg border border-brand-200">
+          <span className="text-brand-700 font-bold">Mapbox route</span>
+          <span className="font-semibold text-slate-800">{routeInfo.distanceKm} km</span>
           <span className="text-slate-400">•</span>
-          <span className="font-bold text-amber-700">~{routeInfo.timeMins} min drive</span>
+          <span className="font-bold text-slate-700">~{routeInfo.timeMins} min</span>
         </div>
       )}
 

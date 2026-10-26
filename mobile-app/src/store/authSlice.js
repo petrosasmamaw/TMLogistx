@@ -2,6 +2,11 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import apiClient, { setAuthToken } from '../api/client.js';
 import { loadSession, saveSession, clearSession } from '../storage/session.js';
 
+async function persistUserPatch(user) {
+  const { token } = await loadSession();
+  if (token && user) await saveSession(token, user);
+}
+
 const MOBILE_ROLES = ['STAFF', 'DRIVER'];
 
 const WRONG_APP_MSG =
@@ -59,6 +64,11 @@ const authSlice = createSlice({
   reducers: {
     clearAuthError(state) {
       state.error = null;
+    },
+    updateSessionUser(state, action) {
+      if (!action.payload) return;
+      state.user = { ...state.user, ...action.payload };
+      persistUserPatch(state.user);
     }
   },
   extraReducers: (builder) => {
@@ -105,5 +115,5 @@ const authSlice = createSlice({
   }
 });
 
-export const { clearAuthError } = authSlice.actions;
+export const { clearAuthError, updateSessionUser } = authSlice.actions;
 export default authSlice.reducer;

@@ -10,6 +10,7 @@ import {
   isExternalRideRequest
 } from '../../utils/rideHelpers.js';
 import TripRequestCard from './TripRequestCard.jsx';
+import { mergeRequestRows, PROJECT_REQUEST_UPSERT } from '../../utils/mergeRequests.js';
 
 export default function ProjectTripsPanel({ projectId }) {
   const [loading, setLoading] = useState(true);
@@ -25,7 +26,7 @@ export default function ProjectTripsPanel({ projectId }) {
     setLoading(true);
     try {
       const res = await apiRequest(`/requests?project_id=${projectId}`);
-      setRequests(res.data || []);
+      setRequests((prev) => mergeRequestRows(prev, res.data || []));
     } catch {
       /* keep prior list */
     } finally {
@@ -38,6 +39,17 @@ export default function ProjectTripsPanel({ projectId }) {
     const interval = setInterval(load, 20000);
     return () => clearInterval(interval);
   }, [load]);
+
+  useEffect(() => {
+    const onUpsert = (event) => {
+      const req = event.detail?.request;
+      if (!req?.id || String(req.project_id) !== String(projectId)) return;
+      setRequests((prev) => mergeRequestRows(prev, [req]));
+      setLoading(false);
+    };
+    window.addEventListener(PROJECT_REQUEST_UPSERT, onUpsert);
+    return () => window.removeEventListener(PROJECT_REQUEST_UPSERT, onUpsert);
+  }, [projectId]);
 
   const rideStats = useMemo(
     () => ({

@@ -1,10 +1,11 @@
 /**
  * Geographic Utility Module
  * Computes road distances, driving duration estimates, and arrival times
- * using Geoapify APIs with intelligent Haversine mathematical fallback.
+ * using Mapbox APIs with intelligent Haversine mathematical fallback.
  */
 
 import { config } from '../config/index.js';
+import { mapboxDrivingRoute, mapboxGeocodeSearch } from './mapboxClient.js';
 
 /**
  * Calculate Great-Circle distance between two coordinates in kilometers (Haversine formula)
@@ -57,65 +58,33 @@ export function calculateEta(fromLat, fromLng, toLat, toLng, fromDate = new Date
 }
 
 /**
- * Live Geoapify Route Calculation (with fallback)
+ * Live Mapbox Directions (with Haversine fallback)
  */
-export async function getGeoapifyRoute(fromLat, fromLng, toLat, toLng) {
-  const apiKey = config.geoapifyApiKey;
-  if (!apiKey || !fromLat || !fromLng || !toLat || !toLng) {
+export async function getMapboxRoute(fromLat, fromLng, toLat, toLng) {
+  if (!fromLat || !fromLng || !toLat || !toLng) {
     return calculateEta(fromLat, fromLng, toLat, toLng);
   }
-
   try {
-    const url = `https://api.geoapify.com/v1/routing?waypoints=${fromLat},${fromLng}|${toLat},${toLng}&mode=drive&apiKey=${apiKey}`;
-    const res = await fetch(url);
-    if (res.ok) {
-      const data = await res.json();
-      if (data?.features?.[0]?.properties) {
-        const prop = data.features[0].properties;
-        const distanceKm = parseFloat((prop.distance / 1000).toFixed(1));
-        const durationMins = Math.ceil(prop.time / 60);
-        return {
-          distanceKm,
-          durationMins,
-          etaDate: new Date(Date.now() + durationMins * 60 * 1000),
-          provider: 'GEOAPIFY_ROUTING',
-          geometry: data.features[0].geometry
-        };
-      }
-    }
+    const routed = await mapboxDrivingRoute(fromLat, fromLng, toLat, toLng);
+    if (routed) return routed;
   } catch (err) {
-    console.warn('[Geoapify API] Routing call failed, falling back to Haversine:', err.message);
+    console.warn('[Mapbox Directions] failed, falling back to Haversine:', err.message);
   }
-
   return calculateEta(fromLat, fromLng, toLat, toLng);
 }
 
+/** @deprecated alias */
+export const getGeoapifyRoute = getMapboxRoute;
+
 /**
- * Geoapify Search / Geocoding
+ * Mapbox forward geocoding
  */
 export async function geocodeLocation(addressText) {
-  const apiKey = config.geoapifyApiKey;
-  if (!apiKey || !addressText) return null;
-
+  if (!addressText) return null;
   try {
-    const encoded = encodeURIComponent(addressText);
-    const url = `https://api.geoapify.com/v1/geocode/search?text=${encoded}&apiKey=${apiKey}`;
-    const res = await fetch(url);
-    if (res.ok) {
-      const data = await res.json();
-      if (data?.features?.[0]) {
-        const feat = data.features[0];
-        return {
-          formatted: feat.properties.formatted,
-          latitude: feat.geometry.coordinates[1],
-          longitude: feat.geometry.coordinates[0],
-          country: feat.properties.country,
-          city: feat.properties.city
-        };
-      }
-    }
+    return await mapboxGeocodeSearch(addressText);
   } catch (err) {
-    console.warn('[Geoapify API] Geocoding call failed:', err.message);
+    console.warn('[Mapbox Geocoding] failed:', err.message);
   }
   return null;
 }
@@ -124,6 +93,7 @@ export default {
   calculateDistanceKm,
   estimateDrivingDurationMins,
   calculateEta,
+  getMapboxRoute,
   getGeoapifyRoute,
   geocodeLocation
 };

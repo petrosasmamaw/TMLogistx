@@ -94,13 +94,50 @@ const fleetSlice = createSlice({
   },
   reducers: {
     updateLiveLocation(state, action) {
-      const { vehicleId, latitude, longitude, speed, heading, reportedAt } = action.payload;
+      const { vehicleId, latitude, longitude, speed, heading, reportedAt, driverId } = action.payload;
       const index = state.liveFleet.findIndex(v => v.id === vehicleId);
       if (index !== -1) {
         state.liveFleet[index].latitude = latitude;
         state.liveFleet[index].longitude = longitude;
         state.liveFleet[index].last_location_update = reportedAt;
         state.liveFleet[index].is_stale = false;
+        if (speed != null) state.liveFleet[index].speed = speed;
+        if (heading != null) state.liveFleet[index].heading = heading;
+      }
+      if (driverId) {
+        const dIdx = state.liveDrivers.findIndex((d) => d.id === driverId);
+        if (dIdx !== -1) {
+          state.liveDrivers[dIdx].latitude = latitude;
+          state.liveDrivers[dIdx].longitude = longitude;
+          state.liveDrivers[dIdx].is_approximate = false;
+        }
+      }
+    },
+    updateLiveDriverLocation(state, action) {
+      const { driverId, latitude, longitude, reportedAt, vehicleId } = action.payload;
+      const dIdx = state.liveDrivers.findIndex((d) => d.id === driverId);
+      if (dIdx !== -1) {
+        state.liveDrivers[dIdx].latitude = latitude;
+        state.liveDrivers[dIdx].longitude = longitude;
+        state.liveDrivers[dIdx].is_approximate = false;
+        if (vehicleId) state.liveDrivers[dIdx].assigned_vehicle_id = vehicleId;
+      } else {
+        state.liveDrivers.push({
+          id: driverId,
+          latitude,
+          longitude,
+          is_approximate: false,
+          assigned_vehicle_id: vehicleId || null
+        });
+      }
+      if (vehicleId) {
+        const vIdx = state.liveFleet.findIndex((v) => v.id === vehicleId);
+        if (vIdx !== -1) {
+          state.liveFleet[vIdx].latitude = latitude;
+          state.liveFleet[vIdx].longitude = longitude;
+          state.liveFleet[vIdx].last_location_update = reportedAt || new Date().toISOString();
+          state.liveFleet[vIdx].is_stale = false;
+        }
       }
     }
   },
@@ -195,6 +232,6 @@ const fleetSlice = createSlice({
   }
 });
 
-export const { updateLiveLocation } = fleetSlice.actions;
+export const { updateLiveLocation, updateLiveDriverLocation } = fleetSlice.actions;
 export default fleetSlice.reducer;
 

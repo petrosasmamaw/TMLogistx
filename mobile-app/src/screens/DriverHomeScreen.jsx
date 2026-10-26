@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { colors } from '../theme/colors';
 import { useTranslation } from '../i18n';
@@ -8,10 +8,16 @@ import DriverHistoryScreen from './DriverHistoryScreen';
 import DriverFuelScreen from './DriverFuelScreen';
 import DriverAccidentScreen from './DriverAccidentScreen';
 import TabBarIcon from '../components/TabBarIcon';
+import AppFooter from '../components/AppFooter';
+import AccountScreen from './AccountScreen';
 
-export const DriverHomeScreen = () => {
+export const DriverHomeScreen = ({ openProfileSignal = 0 }) => {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('STEPPER'); // 'ASSIGNED', 'STEPPER', 'FUEL', 'INCIDENT', 'STATS'
+
+  useEffect(() => {
+    if (openProfileSignal > 0) setActiveTab('ACCOUNT');
+  }, [openProfileSignal]);
 
   return (
     <View style={styles.container}>
@@ -32,9 +38,11 @@ export const DriverHomeScreen = () => {
         {activeTab === 'STATS' && (
           <DriverHistoryScreen />
         )}
+        {activeTab === 'ACCOUNT' && <AccountScreen />}
       </View>
 
-      {/* Driver Bottom Segmented Nav */}
+      <AppFooter />
+
       <View style={styles.bottomNav}>
         {/* Tab 1: Assigned Trips */}
         <TouchableOpacity
@@ -97,6 +105,15 @@ export const DriverHomeScreen = () => {
           <Text style={[styles.navLabel, activeTab === 'STATS' && styles.navLabelActive]}>
             Stats
           </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.navItem, activeTab === 'ACCOUNT' && styles.navItemActive]}
+          onPress={() => setActiveTab('ACCOUNT')}
+          activeOpacity={0.8}
+        >
+          <TabBarIcon name={activeTab === 'ACCOUNT' ? 'person' : 'person-outline'} focused={activeTab === 'ACCOUNT'} size={20} />
+          <Text style={[styles.navLabel, activeTab === 'ACCOUNT' && styles.navLabelActive]}>Profile</Text>
         </TouchableOpacity>
       </View>
     </View>

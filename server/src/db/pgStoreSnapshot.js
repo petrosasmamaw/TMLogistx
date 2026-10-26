@@ -2,6 +2,25 @@ import { syncStoreToRelational } from './relationalSync.js';
 import { persistStoreNow } from './persistStore.js';
 
 const SNAPSHOT_ID = 'main';
+const RELATIONAL_SYNC_MS = Number(process.env.RELATIONAL_SYNC_DEBOUNCE_MS) > 0
+  ? Number(process.env.RELATIONAL_SYNC_DEBOUNCE_MS)
+  : 120000;
+
+let relationalSyncTimer = null;
+let relationalSyncTarget = null;
+
+function scheduleRelationalSync(pool, memoryStore) {
+  if (!pool || !memoryStore) return;
+  relationalSyncTarget = { pool, memoryStore };
+  if (relationalSyncTimer) return;
+  relationalSyncTimer = setTimeout(() => {
+    relationalSyncTimer = null;
+    const target = relationalSyncTarget;
+    relationalSyncTarget = null;
+    if (!target) return;
+    syncStoreToRelational(target.pool, target.memoryStore).catch(() => {});
+  }, RELATIONAL_SYNC_MS);
+}
 
 export async function loadSnapshotFromPg(pool) {
   try {
@@ -32,10 +51,11 @@ export function schedulePgPersist(pool, memoryStore) {
       console.error('[Store] Neon persist failed:', err.message);
     });
     pgPersistTimer = null;
-  }, 150);
+  }, 800);
 }
 
-export async function saveSnapshotToPg(pool, memoryStore) {
+export async function saveSnapshotToPg(pool, memoryStore, options = {}) {
+  const { skipRelational = false, mirrorToDisk = false } = options;
   const payload = {
     _saved_at: new Date().toISOString(),
     ...memoryStore
@@ -47,6 +67,10 @@ export async function saveSnapshotToPg(pool, memoryStore) {
      SET payload = EXCLUDED.payload, updated_at = NOW()`,
     [SNAPSHOT_ID, JSON.stringify(payload)]
   );
-  await syncStoreToRelational(pool, memoryStore);
-  persistStoreNow(memoryStore);
+  if (!skipRelational) {
+    scheduleRelationalSync(pool, memoryStore);
+  }
+  if (mirrorToDisk) {
+    persistStoreNow(memoryStore);
+  }
 }

@@ -1,5 +1,13 @@
 import { Router } from 'express';
-import { getRequests, getMyRequests, getRequestById, createRequest, cancelRequest, rejectRequest } from '../controllers/requestController.js';
+import {
+  getRequests,
+  getMyRequests,
+  getRequestById,
+  getRequestFormContext,
+  createRequest,
+  cancelRequest,
+  rejectRequest
+} from '../controllers/requestController.js';
 import { authenticateJWT, requireRoles } from '../middleware/auth.js';
 import { DISPATCH_ROLES } from '../constants/roles.js';
 
@@ -9,6 +17,7 @@ router.use(authenticateJWT);
 
 router.get('/', getRequests);
 router.get('/my', getMyRequests);
+router.get('/form-context', getRequestFormContext);
 router.get('/:id', getRequestById);
 router.post('/', createRequest);
 router.patch('/:id/cancel', cancelRequest);

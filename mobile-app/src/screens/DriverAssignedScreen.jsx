@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,53 +7,75 @@ import {
   ScrollView,
   Modal,
   TextInput,
-  Alert
+  Alert,
+  Linking,
+  AppState
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useSelector, useDispatch } from 'react-redux';
-import { acceptTrip, rejectTrip, hydrateDriverAssignments } from '../store/tripSlice';
-import { mapDriverAssignmentToMobile } from '../utils/mapApiTrip.js';
+import { rejectTrip, upsertDriverAssignment, refreshDriverAssignments } from '../store/tripSlice';
+import { mapDriverAssignmentToMobile } from '../utils/mapApiTrip';
 import { colors } from '../theme/colors';
 import { useTranslation } from '../i18n';
 import StatusBadge from '../components/StatusBadge';
 import apiClient from '../api/client';
+import { notifyOnce } from '../services/localNotifications';
+import { DriverTripListSkeleton } from '../components/Skeleton';
+import TripContactCard from '../components/TripContactCard';
 
 export const DriverAssignedScreen = ({ onNavigateToActive }) => {
   const dispatch = useDispatch();
   const { t } = useTranslation();
   const assignedTrips = useSelector((state) => state.trips.assignedTrips);
+  const driverLoading = useSelector((state) => state.trips.driverLoading);
+  const hasLoaded = useSelector((state) => state.trips.hasLoadedDriverAssignments);
 
   const [rejectModalVisible, setRejectModalVisible] = useState(false);
   const [selectedTripId, setSelectedTripId] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
   const seenAssignmentsRef = useRef(new Set());
 
-  useEffect(() => {
-    const load = () =>
-      apiClient.getDriverAssignments().then((res) => {
-        const rows = (res.assignments || res.data || []).map(mapDriverAssignmentToMobile);
-        rows.forEach((trip) => {
-          if (trip.status === 'ASSIGNED' && trip.id && !seenAssignmentsRef.current.has(trip.id)) {
-            seenAssignmentsRef.current.add(trip.id);
-            Alert.alert(
-              'New pickup request',
-              `You are called for a car: ${trip.pickup_location || 'pickup'} → ${trip.destination_location || 'destination'}.`
-            );
-          }
-        });
-        dispatch(hydrateDriverAssignments(rows));
-      });
-    load();
-    const poll = setInterval(load, 15000);
-    return () => clearInterval(poll);
+  const loadAssignments = useCallback(() => {
+    dispatch(refreshDriverAssignments({ silent: false }));
   }, [dispatch]);
 
-  const handleAccept = async (tripId) => {
+  useEffect(() => {
+    let lastSync = 0;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return;
+      const now = Date.now();
+      if (now - lastSync < 30000) return;
+      lastSync = now;
+      dispatch(refreshDriverAssignments({ silent: true }));
+    });
+    return () => sub.remove();
+  }, [dispatch]);
+
+  useEffect(() => {
+    assignedTrips.forEach((trip) => {
+      const key = trip.assignment_id || trip.id;
+      if (trip.status === 'ASSIGNED' && key && !seenAssignmentsRef.current.has(key)) {
+        seenAssignmentsRef.current.add(key);
+        const msg = `You are called for a car: ${trip.pickup_location || 'pickup'} → ${trip.destination_location || 'destination'}.`;
+        Alert.alert('New pickup request', msg);
+        notifyOnce(`assign-${key}`, 'New trip assignment', msg);
+      }
+    });
+  }, [assignedTrips]);
+
+  const handleAccept = async (trip) => {
+    const assignmentId = trip.assignment_id || trip.id;
     try {
-      await apiClient.acceptTrip(tripId);
-      dispatch(acceptTrip(tripId));
-      Alert.alert('Assignment Accepted', 'You have accepted this trip. Open the Trip Stepper to begin execution.');
+      dispatch(upsertDriverAssignment({ ...trip, status: 'ACCEPTED', assignment_id: assignmentId }));
+      const res = await apiClient.acceptTrip(assignmentId);
+      const mapped = mapDriverAssignmentToMobile(res.data);
+      if (mapped) {
+        dispatch(upsertDriverAssignment({ ...mapped, status: 'ACCEPTED', assignment_id: assignmentId }));
+      }
+      Alert.alert('Assignment accepted', 'Use Active for map, navigation, and Arrive → Start → End.');
       if (onNavigateToActive) onNavigateToActive();
     } catch (err) {
+      dispatch(refreshDriverAssignments({ silent: true }));
       Alert.alert('Error', err.message);
     }
   };
@@ -89,13 +111,18 @@ export const DriverAssignedScreen = ({ onNavigateToActive }) => {
       </View>
 
       <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
-        {assignedTrips.length === 0 ? (
+        {driverLoading && !hasLoaded ? (
+          <DriverTripListSkeleton rows={3} />
+        ) : assignedTrips.length === 0 ? (
           <View style={styles.emptyView}>
             <Text style={styles.emptyText}>{t('noAssignedTrips')}</Text>
           </View>
         ) : (
           assignedTrips.map((trip) => {
-            const isPending = trip.status === 'ASSIGNED' || trip.status === 'PENDING';
+            const isPending = trip.status === 'ASSIGNED';
+            const showContinue = ['ACCEPTED', 'HEADING_TO_PICKUP', 'ARRIVED', 'IN_TRANSIT', 'PASSENGER_PICKED_UP'].includes(
+              trip.status
+            );
 
             return (
               <View key={trip.id} style={styles.card}>
@@ -117,42 +144,51 @@ export const DriverAssignedScreen = ({ onNavigateToActive }) => {
                 {/* Route */}
                 <View style={styles.routeBox}>
                   <View style={styles.routeRow}>
-                    <Text style={styles.dotA}>🟢</Text>
+                    <Ionicons name="radio-button-on" size={10} color={colors.success} />
                     <Text style={styles.routeText} numberOfLines={1}>{trip.pickup_location}</Text>
                   </View>
                   <View style={styles.routeRow}>
-                    <Text style={styles.dotB}>🔴</Text>
+                    <Ionicons name="location" size={12} color="#ef4444" />
                     <Text style={styles.routeText} numberOfLines={1}>{trip.destination_location}</Text>
                   </View>
                 </View>
 
-                {/* Purpose & Passengers */}
-                <View style={styles.detailsRow}>
-                  <Text style={styles.purposeText} numberOfLines={1}>
-                    🎯 {trip.purpose}
-                  </Text>
-                  <Text style={styles.passengerText}>
-                    👥 {trip.passenger_count} pass.
-                  </Text>
-                </View>
+                <TripContactCard
+                  title="Staff passenger"
+                  name={trip.staff_name}
+                  phone={trip.staff_phone}
+                  avatarUrl={trip.staff_avatar_url}
+                  subtitle={trip.passenger_count ? `${trip.passenger_count} passenger(s)` : undefined}
+                />
+
+                {trip.purpose ? (
+                  <View style={styles.detailsRow}>
+                    <Text style={styles.purposeText} numberOfLines={2}>Purpose: {trip.purpose}</Text>
+                  </View>
+                ) : null}
 
                 {/* Accept / Reject Action Bar */}
                 {isPending && (
                   <View style={styles.actionsBar}>
                     <TouchableOpacity
                       style={styles.declineBtn}
-                      onPress={() => openRejectModal(trip.id)}
+                      onPress={() => openRejectModal(trip.assignment_id || trip.id)}
                     >
-                      <Text style={styles.declineBtnText}>✕ {t('rejectAssignment')}</Text>
+                      <Text style={styles.declineBtnText}>{t('rejectAssignment')}</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
                       style={styles.acceptBtn}
-                      onPress={() => handleAccept(trip.id)}
+                      onPress={() => handleAccept(trip)}
                     >
-                      <Text style={styles.acceptBtnText}>✓ {t('acceptAssignment')}</Text>
+                      <Text style={styles.acceptBtnText}>{t('acceptAssignment')}</Text>
                     </TouchableOpacity>
                   </View>
+                )}
+                {showContinue && (
+                  <TouchableOpacity style={styles.continueBtn} onPress={onNavigateToActive}>
+                    <Text style={styles.continueBtnText}>Open Active trip →</Text>
+                  </TouchableOpacity>
                 )}
               </View>
             );
@@ -279,8 +315,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  dotA: { fontSize: 8 },
-  dotB: { fontSize: 8 },
+  staffRow: {
+    marginTop: 8,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: colors.bgTertiary,
+    gap: 6
+  },
+  staffLabel: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '600'
+  },
+  phoneLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6
+  },
+  phoneLinkText: {
+    color: colors.primary,
+    fontSize: 13,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums']
+  },
   routeText: {
     color: colors.textPrimary,
     fontSize: 12,
@@ -336,6 +393,20 @@ const styles = StyleSheet.create({
     color: '#000',
     fontSize: 13,
     fontWeight: '900',
+  },
+  continueBtn: {
+    marginTop: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    backgroundColor: colors.primary + '22',
+    borderWidth: 1,
+    borderColor: colors.primary
+  },
+  continueBtnText: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '800'
   },
   modalBackdrop: {
     flex: 1,

@@ -16,7 +16,13 @@ npx eas env:create --name EXPO_PUBLIC_API_BASE_URL --value "https://tmlogistx.on
 npx eas env:create --name EXPO_PUBLIC_SOCKET_URL --value "https://tmlogistx.onrender.com" --environment preview --visibility plaintext
 ```
 
-Optional keys (maps): `EXPO_PUBLIC_GEOAPIFY_API_KEY`, `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` the same way.
+Optional keys (maps): `EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN`, `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` the same way.
+
+### Web dev reload
+
+- **Browser:** `npm run dev` (opens http://localhost:8081). Save files for fast refresh, or **F5** in the browser.
+- Terminal **`r`** only works when a client is connected (browser tab open, or Expo Go on a phone). If you see *No apps connected*, press **`w`** in the Expo terminal to open/reconnect web, then **`r`** again.
+- From another terminal: `npm run reload` (sends Metro `/reload` while the dev server is running).
 
 ## 2. Link EAS project (once)
 

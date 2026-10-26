@@ -6,9 +6,16 @@ import {
   createCountry,
   createProject,
   assignMasterPerson,
+  mergeProject,
   updateProjectStatus
 } from '../store/slices/projectSlice.js';
 import { apiRequest } from '../api/client.js';
+import CountrySearchSelect from '../components/admin/CountrySearchSelect.jsx';
+import {
+  DEFAULT_DAY_SHIFT_START,
+  DEFAULT_DAY_SHIFT_END,
+  formatDayShiftRange
+} from '../constants/countryShiftDefaults.js';
 import {
   countExternalRidesForDashboard,
   matchesExternalRideFilter,
@@ -114,7 +121,15 @@ export default function AdminView() {
   const [showWorkerModal, setShowWorkerModal] = useState(false);
   const [savingWorker, setSavingWorker] = useState(false);
   const [createdWorkerCreds, setCreatedWorkerCreds] = useState(null);
-  const [editCountryForm, setEditCountryForm] = useState({ name: '', code: '', currency: '', is_active: true });
+  const [editCountryForm, setEditCountryForm] = useState({
+    name: '',
+    code: '',
+    currency: '',
+    timezone: 'UTC',
+    day_shift_start: DEFAULT_DAY_SHIFT_START,
+    day_shift_end: DEFAULT_DAY_SHIFT_END,
+    is_active: true
+  });
   const [editUserForm, setEditUserForm] = useState({
     full_name: '',
     phone_number: '',
@@ -152,7 +167,16 @@ export default function AdminView() {
     isNew: true
   });
 
-  const [countryForm, setCountryForm] = useState({ name: '', code: '', currency: 'ETB' });
+  const [countryForm, setCountryForm] = useState({
+    catalog_code: '',
+    name: '',
+    code: '',
+    currency: 'ETB',
+    timezone: 'UTC',
+    day_shift_start: DEFAULT_DAY_SHIFT_START,
+    day_shift_end: DEFAULT_DAY_SHIFT_END
+  });
+  const [catalogPick, setCatalogPick] = useState(null);
   const [projectForm, setProjectForm] = useState({
     country_id: '',
     name: '',
@@ -265,10 +289,27 @@ export default function AdminView() {
 
   const handleCreateCountry = async (e) => {
     e.preventDefault();
-    if (!countryForm.name || !countryForm.code) return;
-    await dispatch(createCountry(countryForm));
+    if (!countryForm.catalog_code && (!countryForm.name || !countryForm.code)) return;
+    await dispatch(
+      createCountry({
+        catalog_code: countryForm.catalog_code,
+        name: countryForm.name,
+        code: countryForm.code,
+        currency: countryForm.currency,
+        timezone: countryForm.timezone
+      })
+    );
     setShowCountryModal(false);
-    setCountryForm({ name: '', code: '', currency: 'ETB' });
+    setCatalogPick(null);
+    setCountryForm({
+      catalog_code: '',
+      name: '',
+      code: '',
+      currency: 'ETB',
+      timezone: 'UTC',
+      day_shift_start: DEFAULT_DAY_SHIFT_START,
+      day_shift_end: DEFAULT_DAY_SHIFT_END
+    });
   };
 
   const handleCreateProject = async (e) => {
@@ -315,9 +356,13 @@ export default function AdminView() {
       const res = await apiRequest('/users', { method: 'POST', body });
       const newUser = res.data;
       if (masterForm.project_id && newUser?.id) {
-        await dispatch(
+        const assignPayload = await dispatch(
           assignMasterPerson({ projectId: masterForm.project_id, userId: newUser.id })
-        );
+        ).unwrap();
+        if (assignPayload?.user) {
+          newUser.master_project_ids = assignPayload.user.master_project_ids;
+          newUser.project_id = assignPayload.user.project_id;
+        }
         await dispatch(fetchProjects());
       }
       setCreatedMasterCreds({
@@ -333,7 +378,11 @@ export default function AdminView() {
         country_id: '',
         project_id: ''
       });
-      loadUsers();
+      setUsers((prev) => {
+        const without = prev.filter((u) => u.id !== newUser.id);
+        return [...without, { ...newUser, role: 'MASTER_PERSON' }];
+      });
+      await loadUsers();
     } catch (err) {
       alert(err.message || 'Failed to create master person');
     } finally {
@@ -351,12 +400,22 @@ export default function AdminView() {
     e.preventDefault();
     if (!assignMasterProjectId || !assignMasterUserId) return;
     try {
-      await dispatch(
+      const payload = await dispatch(
         assignMasterPerson({ projectId: assignMasterProjectId, userId: assignMasterUserId })
       ).unwrap();
+      if (payload?.user?.id) {
+        setUsers((prev) =>
+          prev.map((u) =>
+            u.id === payload.user.id
+              ? { ...u, project_id: payload.user.project_id, master_project_ids: payload.user.master_project_ids }
+              : u
+          )
+        );
+      }
       await dispatch(fetchProjects());
       setShowAssignMasterModal(false);
-      loadUsers();
+      setAssignMasterProjectId('');
+      setAssignMasterUserId('');
     } catch (err) {
       alert(err.message || 'Assignment failed');
     }
@@ -455,6 +514,9 @@ export default function AdminView() {
       name: c.name,
       code: c.code,
       currency: c.currency,
+      timezone: c.timezone || 'UTC',
+      day_shift_start: c.day_shift_start || DEFAULT_DAY_SHIFT_START,
+      day_shift_end: c.day_shift_end || DEFAULT_DAY_SHIFT_END,
       is_active: c.is_active !== false
     });
   };
@@ -537,11 +599,15 @@ export default function AdminView() {
     if (!editingProject) return;
     setSavingEdit(true);
     try {
-      await apiRequest(`/projects/${encodeURIComponent(editingProject.id)}`, {
+      const res = await apiRequest(`/projects/${encodeURIComponent(editingProject.id)}`, {
         method: 'PATCH',
         body: editProjectForm
       });
+      if (res.data) {
+        dispatch(mergeProject(res.data));
+      }
       await dispatch(fetchProjects());
+      await loadUsers();
       setEditingProject(null);
     } catch (err) {
       alert(err.message || 'Could not save project');
@@ -874,6 +940,7 @@ export default function AdminView() {
                     <th className="p-3.5">Country</th>
                     <th className="p-3.5">Code</th>
                     <th className="p-3.5">Currency</th>
+                    <th className="p-3.5">Timezone / day shift</th>
                     <th className="p-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -883,6 +950,10 @@ export default function AdminView() {
                       <td className="p-3.5 font-bold text-slate-900">{c.name}</td>
                       <td className="p-3.5 font-mono text-purple-600">{c.code}</td>
                       <td className="p-3.5 font-semibold text-amber-700">{c.currency}</td>
+                      <td className="p-3.5 text-slate-600">
+                        {c.timezone || 'UTC'}
+                        <span className="text-slate-400"> · Day {formatDayShiftRange(c)}</span>
+                      </td>
                       <td className="p-3.5 text-right space-x-1">
                         <button
                           type="button"
@@ -1457,6 +1528,33 @@ export default function AdminView() {
                   placeholder="Currency"
                 />
               </div>
+              <input
+                value={editCountryForm.timezone}
+                onChange={(e) => setEditCountryForm({ ...editCountryForm, timezone: e.target.value })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 text-slate-900"
+                placeholder="IANA timezone e.g. Africa/Addis_Ababa"
+              />
+              <p className="text-[10px] text-slate-500 font-medium">Day shift (local time in this country)</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-slate-500 block mb-0.5">From (e.g. 8:00 AM)</label>
+                  <input
+                    type="time"
+                    value={editCountryForm.day_shift_start}
+                    onChange={(e) => setEditCountryForm({ ...editCountryForm, day_shift_start: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-500 block mb-0.5">To (e.g. 5:30 PM)</label>
+                  <input
+                    type="time"
+                    value={editCountryForm.day_shift_end}
+                    onChange={(e) => setEditCountryForm({ ...editCountryForm, day_shift_end: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 text-slate-900"
+                  />
+                </div>
+              </div>
               <label className="flex items-center gap-2 text-slate-700">
                 <input
                   type="checkbox"
@@ -1961,41 +2059,25 @@ export default function AdminView() {
               <Globe className="w-5 h-5 text-brand-600" /> Add Country Hub
             </h3>
             <form onSubmit={handleCreateCountry} className="space-y-3 text-xs">
-              <div>
-                <label className="text-slate-700 block mb-1 font-medium">Country Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Kenya"
-                  value={countryForm.name}
-                  onChange={e => setCountryForm({ ...countryForm, name: e.target.value })}
-                  className="w-full p-2.5 rounded-xl bg-white border border-slate-300 text-white"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-slate-700 block mb-1 font-medium">ISO Code</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. KEN"
-                    value={countryForm.code}
-                    onChange={e => setCountryForm({ ...countryForm, code: e.target.value })}
-                    className="w-full p-2.5 rounded-xl bg-white border border-slate-300 text-white uppercase"
-                  />
-                </div>
-                <div>
-                  <label className="text-slate-700 block mb-1 font-medium">Currency</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. KES"
-                    value={countryForm.currency}
-                    onChange={e => setCountryForm({ ...countryForm, currency: e.target.value })}
-                    className="w-full p-2.5 rounded-xl bg-white border border-slate-300 text-white uppercase"
-                  />
-                </div>
-              </div>
+              <CountrySearchSelect
+                value={catalogPick}
+                onSelect={(row) => {
+                  setCatalogPick(row);
+                  setCountryForm({
+                    ...countryForm,
+                    catalog_code: row.code,
+                    name: row.name,
+                    code: row.code,
+                    currency: row.currency,
+                    timezone: row.timezone
+                  });
+                }}
+              />
+              <p className="text-[10px] text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                Day shift is set automatically to <strong>8:00 AM – 5:30 PM</strong> in the country&apos;s local
+                timezone ({countryForm.timezone || 'from catalog'}). After creating the country, use{' '}
+                <strong>Edit</strong> to change hours (e.g. Ethiopia office 8:00 AM – 5:30 PM).
+              </p>
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"

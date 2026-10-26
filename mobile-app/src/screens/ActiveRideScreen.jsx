@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import useStaffActiveTrip from '../hooks/useStaffActiveTrip';
 import {
   View,
   Text,
@@ -23,10 +24,13 @@ import { colors } from '../theme/colors';
 import { useTranslation } from '../i18n';
 import StatusBadge from '../components/StatusBadge';
 import TripPipelineStepper from '../components/TripPipelineStepper';
-import MiniMapPreview from '../components/MiniMapPreview';
+import TripLiveMap from '../components/TripLiveMap';
 import apiClient from '../api/client';
 import AnimatedTripCard from '../components/AnimatedTripCard';
+import { Ionicons } from '@expo/vector-icons';
+import { ActiveRideSkeleton } from '../components/Skeleton';
 import { formatDistanceDisplay } from '../utils/geo';
+import TripContactCard from '../components/TripContactCard';
 
 function calculateDistanceKm(lat1, lon1, lat2, lon2) {
   if (!lat1 || !lon1 || !lat2 || !lon2) return 5.8;
@@ -44,15 +48,17 @@ function calculateDistanceKm(lat1, lon1, lat2, lon2) {
 export const ActiveRideScreen = ({ onNavigateToRequest }) => {
   const dispatch = useDispatch();
   const { t } = useTranslation();
-  const activeTripFromStore = useSelector((state) => state.trips.activeTrip);
-  const staffRequests = useSelector((state) => state.trips.requests);
+  const activeTrip = useStaffActiveTrip();
   const staffLoading = useSelector((state) => state.trips.loading);
+  const hasLoadedStaffTrips = useSelector((state) => state.trips.hasLoadedStaffTrips);
   const terminalStatuses = new Set(['COMPLETED', 'CANCELLED', 'REJECTED']);
-  const activeTrip =
-    activeTripFromStore ||
-    staffRequests.find((r) => r?.status && !terminalStatuses.has(r.status)) ||
-    null;
   const gps = useSelector((state) => state.gps.currentLocation);
+
+  const liveTrip = activeTrip;
+  const displayTrip =
+    liveTrip && !terminalStatuses.has(String(liveTrip.status || '').toUpperCase())
+      ? liveTrip
+      : null;
 
   // External Ride State
   const [fareAmount, setFareAmount] = useState('');
@@ -87,10 +93,10 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
           onPress: async () => {
             try {
               setIsSubmitting(true);
-              if (activeTrip?.id) {
-                await apiClient.cancelMyRequest(activeTrip.id, 'Cancelled by passenger on mobile');
+              if (liveTrip?.id) {
+                await apiClient.cancelMyRequest(liveTrip.id, 'Cancelled by passenger on mobile');
               }
-              dispatch(cancelTrip(activeTrip.id));
+              dispatch(cancelTrip(liveTrip.id));
               dispatch(clearActiveTrip());
               Alert.alert('Trip Cancelled', 'Your request has been cancelled.');
             } catch (err) {
@@ -102,13 +108,6 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
         }
       ]
     );
-  };
-
-  const handleCallDriver = () => {
-    const phone = activeTrip?.assigned_driver_phone || '+251911234567';
-    Linking.openURL(`tel:${phone}`).catch(() => {
-      Alert.alert('Phone Dialer', `Calling driver: ${phone}`);
-    });
   };
 
   const handleCallRideHotline = () => {
@@ -123,27 +122,21 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
     });
   };
 
-  const refreshActiveTrip = async () => {
+  const refreshActiveTrip = async (silent = true) => {
     try {
-      await dispatch(refreshStaffTrips()).unwrap();
+      await dispatch(refreshStaffTrips({ silent })).unwrap();
     } catch {
       /* keep current trip in store */
     }
   };
 
-  useEffect(() => {
-    if (!activeTrip?.id) return undefined;
-    const timer = setInterval(refreshActiveTrip, 12000);
-    return () => clearInterval(timer);
-  }, [activeTrip?.id]);
-
   const handleStartFleetMeter = async () => {
     try {
       setIsSubmitting(true);
-      const lat = gps.latitude || activeTrip.pickup_latitude;
-      const lng = gps.longitude || activeTrip.pickup_longitude;
-      await apiClient.startFleetMeter(activeTrip.id, lat, lng);
-      dispatch(updateTripStatus({ tripId: activeTrip.id, status: 'IN_TRANSIT' }));
+      const lat = gps.latitude || liveTrip.pickup_latitude;
+      const lng = gps.longitude || liveTrip.pickup_longitude;
+      await apiClient.startFleetMeter(liveTrip.id, lat, lng);
+      dispatch(updateTripStatus({ tripId: liveTrip.id, status: 'IN_TRANSIT' }));
       await refreshActiveTrip();
       Alert.alert('Trip started', 'Distance counter is running from your pickup point.');
     } catch (err) {
@@ -156,11 +149,11 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
   const handleEndFleetMeter = async () => {
     try {
       setIsSubmitting(true);
-      const lat = gps.latitude || activeTrip.destination_latitude;
-      const lng = gps.longitude || activeTrip.destination_longitude;
-      const res = await apiClient.completeFleetMeter(activeTrip.id, lat, lng);
+      const lat = gps.latitude || liveTrip.destination_latitude;
+      const lng = gps.longitude || liveTrip.destination_longitude;
+      const res = await apiClient.completeFleetMeter(liveTrip.id, lat, lng);
       const km = res.data?.assignment?.actual_distance_km;
-      dispatch(updateTripStatus({ tripId: activeTrip.id, status: 'COMPLETED' }));
+      dispatch(updateTripStatus({ tripId: liveTrip.id, status: 'COMPLETED' }));
       await refreshActiveTrip();
       Alert.alert('Trip completed', km ? `Recorded distance: ${km} km` : 'Distance recorded.');
     } catch (err) {
@@ -174,19 +167,19 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
   const handleStartExternalRide = async () => {
     try {
       setIsSubmitting(true);
-      const startLat = gps.latitude || activeTrip.pickup_latitude || 8.9806;
-      const startLng = gps.longitude || activeTrip.pickup_longitude || 38.7997;
+      const startLat = gps.latitude || liveTrip.pickup_latitude || 8.9806;
+      const startLng = gps.longitude || liveTrip.pickup_longitude || 38.7997;
       const startTime = new Date().toISOString();
 
       await apiClient.startExternalRide(
-        activeTrip.id,
+        liveTrip.id,
         startLat,
         startLng,
-        activeTrip.pickup_location
+        liveTrip.pickup_location
       );
 
       dispatch(startExternalTrip({
-        tripId: activeTrip.id,
+        tripId: liveTrip.id,
         startLat,
         startLng,
         startTime
@@ -205,10 +198,10 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
 
   // Staff reaches destination and presses End Ride
   const handleEndExternalRide = () => {
-    const startLat = activeTrip.external_start_lat || activeTrip.pickup_latitude || 8.9806;
-    const startLng = activeTrip.external_start_lng || activeTrip.pickup_longitude || 38.7997;
-    const endLat = gps.latitude || activeTrip.destination_latitude || 9.0150;
-    const endLng = gps.longitude || activeTrip.destination_longitude || 38.7620;
+    const startLat = liveTrip.external_start_lat || liveTrip.pickup_latitude || 8.9806;
+    const startLng = liveTrip.external_start_lng || liveTrip.pickup_longitude || 38.7997;
+    const endLat = gps.latitude || liveTrip.destination_latitude || 9.0150;
+    const endLng = gps.longitude || liveTrip.destination_longitude || 38.7620;
 
     const distance = calculateDistanceKm(startLat, startLng, endLat, endLng);
     setComputedDistance(distance);
@@ -225,22 +218,22 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
     try {
       setIsSubmitting(true);
       const fare = parseFloat(fareAmount);
-      const endLat = gps.latitude || activeTrip.destination_latitude || 9.0150;
-      const endLng = gps.longitude || activeTrip.destination_longitude || 38.7620;
+      const endLat = gps.latitude || liveTrip.destination_latitude || 9.0150;
+      const endLng = gps.longitude || liveTrip.destination_longitude || 38.7620;
 
       await apiClient.completeExternalRide({
-        request_id: activeTrip.id,
+        request_id: liveTrip.id,
         end_lat: endLat,
         end_lng: endLng,
-        end_address: activeTrip.destination_location,
+        end_address: liveTrip.destination_location,
         fare_amount: fare,
         currency: 'ETB',
-        provider_name: activeTrip.external_provider || 'Uber / RIDE',
+        provider_name: liveTrip.external_provider || 'Uber / RIDE',
         receipt_notes: receiptNotes
       });
 
       dispatch(completeExternalTrip({
-        tripId: activeTrip.id,
+        tripId: liveTrip.id,
         distanceKm: computedDistance,
         fareAmount: fare,
         currency: 'ETB',
@@ -259,33 +252,48 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
     }
   };
 
-  if (!activeTrip && staffLoading) {
-    return (
-      <View style={styles.emptyContainer}>
-        <ActivityIndicator size="large" color={colors.amber} />
-        <Text style={[styles.emptyDesc, { marginTop: 16 }]}>Loading your trips…</Text>
-      </View>
-    );
+  const goToRequestPage = () => {
+    if (typeof onNavigateToRequest === 'function') {
+      onNavigateToRequest();
+    }
+  };
+
+  if (!displayTrip && (!hasLoadedStaffTrips || staffLoading)) {
+    return <ActiveRideSkeleton />;
   }
 
-  if (!activeTrip) {
+  if (!displayTrip) {
+    const endedTrip =
+      liveTrip && terminalStatuses.has(String(liveTrip.status || '').toUpperCase()) ? liveTrip : null;
     return (
       <View style={styles.emptyContainer}>
         <View style={styles.emptyIconBadge}>
-          <Text style={styles.emptyIconText}>🚗</Text>
+          <Ionicons
+            name={endedTrip ? 'checkmark-circle-outline' : 'car-outline'}
+            size={40}
+            color={endedTrip ? colors.success : colors.textMuted}
+          />
         </View>
-        <Text style={styles.emptyTitle}>{t('noActiveRide')}</Text>
-        <Text style={styles.emptyDesc}>{t('noActiveRideDesc')}</Text>
-        <TouchableOpacity style={styles.bookNowBtn} onPress={onNavigateToRequest}>
-          <Text style={styles.bookNowBtnText}>+ {t('requestRide')}</Text>
+        <Text style={styles.emptyTitle}>
+          {endedTrip ? 'Trip completed' : t('noActiveRide')}
+        </Text>
+        <Text style={styles.emptyDesc}>
+          {endedTrip
+            ? `${endedTrip.request_number || endedTrip.request_code || 'Your ride'} is finished. Open the Request tab to book another movement.`
+            : t('noActiveRideDesc')}
+        </Text>
+        <TouchableOpacity style={styles.bookNowBtn} onPress={goToRequestPage} activeOpacity={0.85}>
+          <Text style={styles.bookNowBtnText}>{t('tabRequest')} — {t('requestRide')}</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
-  const isExternalAuthorized = activeTrip.status === 'EXTERNAL_AUTHORIZED';
-  const isExternalInTransit = activeTrip.status === 'IN_TRANSIT' && (activeTrip.external_authorized || activeTrip.external_provider || !activeTrip.assigned_driver_id);
-  const isExternalCompleted = activeTrip.status === 'COMPLETED' && (activeTrip.external_cost || activeTrip.external_authorized);
+  const trip = displayTrip;
+
+  const isExternalAuthorized = trip.status === 'EXTERNAL_AUTHORIZED';
+  const isExternalInTransit = trip.status === 'IN_TRANSIT' && (trip.external_authorized || trip.external_provider || !trip.assigned_driver_id);
+  const isExternalCompleted = trip.status === 'COMPLETED' && (trip.external_cost || trip.external_authorized);
 
   const formatTimer = (sec) => {
     const mins = Math.floor(sec / 60);
@@ -298,13 +306,13 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
       {/* Title & Request Number Header */}
       <View style={styles.headerRow}>
         <View>
-          <Text style={styles.requestNum}>{activeTrip.request_number || activeTrip.request_code}</Text>
-          <Text style={styles.projectText}>{activeTrip.project_name || 'Addis Ababa Urban Mobility'}</Text>
+          <Text style={styles.requestNum}>{trip.request_number || trip.request_code}</Text>
+          <Text style={styles.projectText}>{trip.project_name || 'Addis Ababa Urban Mobility'}</Text>
         </View>
-        <StatusBadge status={activeTrip.status} />
+        <StatusBadge status={trip.status} />
       </View>
 
-      {activeTrip.status === 'PENDING' && (
+      {trip.status === 'PENDING' && (
         <View style={styles.pendingCard}>
           <Text style={styles.pendingTitle}>Waiting for coordinator</Text>
           <Text style={styles.pendingDesc}>
@@ -322,41 +330,41 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
             <Text style={styles.uberIcon}>🚕</Text>
             <View style={{ flex: 1 }}>
               <Text style={styles.uberTitle}>{t('uberAuthorizedBadge')}</Text>
-              <Text style={styles.uberProvider}>{activeTrip.external_provider || 'Uber / RIDE Transportation'}</Text>
+              <Text style={styles.uberProvider}>{trip.external_provider || 'Uber / RIDE Transportation'}</Text>
             </View>
           </View>
 
           {/* Incoming Coordinator-Dispatched Taxi Card */}
-          {activeTrip.external_driver_name ? (
+          {trip.external_driver_name ? (
             <View style={styles.dispatchedTaxiCard}>
               <View style={styles.dispatchedHeader}>
                 <Text style={styles.dispatchedTitle}>🚕 TAXI DISPATCHED BY COORDINATOR</Text>
                 <View style={styles.providerBadge}>
-                  <Text style={styles.providerBadgeText}>{activeTrip.external_provider || 'RIDE 8294'}</Text>
+                  <Text style={styles.providerBadgeText}>{trip.external_provider || 'RIDE 8294'}</Text>
                 </View>
               </View>
               <View style={styles.dispatchedDetailsGrid}>
                 <View style={styles.dispatchedCol}>
                   <Text style={styles.dispatchedLabel}>DRIVER NAME</Text>
-                  <Text style={styles.dispatchedVal}>{activeTrip.external_driver_name}</Text>
+                  <Text style={styles.dispatchedVal}>{trip.external_driver_name}</Text>
                 </View>
                 <View style={styles.dispatchedCol}>
                   <Text style={styles.dispatchedLabel}>TAXI PLATE & MODEL</Text>
                   <Text style={styles.dispatchedVal}>
-                    {activeTrip.external_vehicle_plate || 'Taxi Plate'} • {activeTrip.external_vehicle_model || 'Sedan'}
+                    {trip.external_vehicle_plate || 'Taxi Plate'} • {trip.external_vehicle_model || 'Sedan'}
                   </Text>
                 </View>
               </View>
-              {activeTrip.external_driver_phone ? (
+              {trip.external_driver_phone ? (
                 <TouchableOpacity
                   style={styles.directCallTaxiBtn}
-                  onPress={() => Linking.openURL(`tel:${activeTrip.external_driver_phone}`)}
+                  onPress={() => Linking.openURL(`tel:${trip.external_driver_phone}`)}
                 >
-                  <Text style={styles.directCallTaxiBtnText}>📞 Call Taxi Driver: {activeTrip.external_driver_phone}</Text>
+                  <Text style={styles.directCallTaxiBtnText}>📞 Call Taxi Driver: {trip.external_driver_phone}</Text>
                 </TouchableOpacity>
               ) : null}
-              {activeTrip.external_booking_ref ? (
-                <Text style={styles.bookingRefText}>Booking Ref: {activeTrip.external_booking_ref}</Text>
+              {trip.external_booking_ref ? (
+                <Text style={styles.bookingRefText}>Booking Ref: {trip.external_booking_ref}</Text>
               ) : null}
             </View>
           ) : (
@@ -401,12 +409,12 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
         <View style={styles.inTransitCard}>
           <View style={styles.inTransitHeader}>
             <View style={styles.livePulse} />
-            <Text style={styles.inTransitTitle}>🚕 {activeTrip.external_provider || 'Uber / RIDE'} IN PROGRESS</Text>
+            <Text style={styles.inTransitTitle}>🚕 {trip.external_provider || 'Uber / RIDE'} IN PROGRESS</Text>
             <Text style={styles.timerText}>{formatTimer(elapsedSeconds)}</Text>
           </View>
 
           <Text style={styles.inTransitSubtitle}>
-            Trip started at {new Date(activeTrip.external_start_time || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Real-time GPS distance calculation active.
+            Trip started at {new Date(trip.external_start_time || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Real-time GPS distance calculation active.
           </Text>
 
           {!showFareInput ? (
@@ -474,95 +482,90 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
             <Text style={styles.completedIcon}>✓</Text>
             <View>
               <Text style={styles.completedTitle}>External Ride Completed</Text>
-              <Text style={styles.completedSubtitle}>{activeTrip.external_provider || 'Uber / RIDE'}</Text>
+              <Text style={styles.completedSubtitle}>{trip.external_provider || 'Uber / RIDE'}</Text>
             </View>
           </View>
           <View style={styles.completedGrid}>
             <View style={styles.completedCol}>
               <Text style={styles.colLabel}>Distance</Text>
-              <Text style={styles.colValue}>{activeTrip.external_distance_km ? `${activeTrip.external_distance_km} km` : '5.8 km'}</Text>
+              <Text style={styles.colValue}>{trip.external_distance_km ? `${trip.external_distance_km} km` : '5.8 km'}</Text>
             </View>
             <View style={styles.completedCol}>
               <Text style={styles.colLabel}>Fare Paid</Text>
-              <Text style={styles.colValueFare}>{activeTrip.external_cost || 450} {activeTrip.external_currency || 'ETB'}</Text>
+              <Text style={styles.colValueFare}>{trip.external_cost || 450} {trip.external_currency || 'ETB'}</Text>
             </View>
           </View>
-          {activeTrip.external_receipt_notes ? (
-            <Text style={styles.receiptNoteText}>Note: {activeTrip.external_receipt_notes}</Text>
+          {trip.external_receipt_notes ? (
+            <Text style={styles.receiptNoteText}>Note: {trip.external_receipt_notes}</Text>
           ) : null}
         </View>
       )}
 
       {/* Visual Workflow Stepper (Standard internal fleet or external) */}
-      {!isExternalAuthorized && !isExternalInTransit && !isExternalCompleted && activeTrip.assigned_driver_name && (
+      {!isExternalAuthorized && !isExternalInTransit && !isExternalCompleted && (
         <AnimatedTripCard>
           <View style={styles.stepperCard}>
             <Text style={styles.sectionHeading}>{t('currentProgress')}</Text>
-            <TripPipelineStepper currentStatus={activeTrip.status} />
+            <TripPipelineStepper currentStatus={trip.status} />
           </View>
         </AnimatedTripCard>
       )}
 
       {/* Radar Map Preview */}
-      <MiniMapPreview
-        pickup={activeTrip.pickup_location}
-        destination={activeTrip.destination_location}
-        currentLat={gps.latitude}
-        currentLng={gps.longitude}
+      <TripLiveMap
+        mapSessionKey={trip.assignment_id || trip.id}
+        mode="staff"
+        tripStatus={trip.status}
+        height={280}
+        pickupLat={trip.pickup_latitude}
+        pickupLng={trip.pickup_longitude}
+        destLat={trip.destination_latitude}
+        destLng={trip.destination_longitude}
+        driverLat={trip.assigned_driver_latitude}
+        driverLng={trip.assigned_driver_longitude}
+        staffLat={gps.latitude}
+        staffLng={gps.longitude}
         speedKmh={gps.speedKmh}
         heading={gps.heading}
-        etaMinutes={activeTrip.eta_minutes || 8}
-        distanceKm={formatDistanceDisplay(activeTrip)}
+        etaMinutes={trip.eta_minutes || 8}
+        distanceKm={formatDistanceDisplay(trip)}
       />
 
       {/* Internal Fleet Driver Card */}
-      {activeTrip.assigned_driver_name && !isExternalAuthorized && (
+      {trip.assigned_driver_name && !isExternalAuthorized && (
         <View style={styles.comingCard}>
           <View style={styles.comingBanner}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={{ fontSize: 16 }}>🚗</Text>
+              <Ionicons name="car-sport-outline" size={18} color={colors.amber} />
               <Text style={styles.comingHeading}>YOUR CAR IS COMING</Text>
             </View>
             <View style={styles.etaPill}>
-              <Text style={styles.etaPillText}>ETA ~ {activeTrip.eta_minutes || 8} mins</Text>
+              <Text style={styles.etaPillText}>ETA ~ {trip.eta_minutes || 8} mins</Text>
             </View>
           </View>
 
           {/* Vehicle Information */}
           <View style={styles.vehRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.vehTitle}>{activeTrip.assigned_vehicle_model || 'Fleet vehicle'}</Text>
+              <Text style={styles.vehTitle}>{trip.assigned_vehicle_model || 'Fleet vehicle'}</Text>
               <Text style={styles.vehSub}>Assigned fleet</Text>
             </View>
             <View style={styles.plateBadge}>
-              <Text style={styles.plateBadgeText}>{activeTrip.assigned_vehicle_plate || '—'}</Text>
+              <Text style={styles.plateBadgeText}>{trip.assigned_vehicle_plate || '—'}</Text>
             </View>
           </View>
 
-          {/* Driver Information */}
-          <View style={styles.driverInfoRow}>
-            <View style={styles.driverAvatar}>
-              <Text style={styles.driverAvatarText}>
-                {(activeTrip.assigned_driver_name || '?')[0]}
-              </Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={styles.driverName}>
-                  {activeTrip.assigned_driver_name}
-                </Text>
-              </View>
-              <Text style={styles.driverSub}>Certified Fleet Driver</Text>
-            </View>
-
-            {/* Call Driver Action */}
-            <TouchableOpacity style={styles.callBtn} onPress={handleCallDriver}>
-              <Text style={styles.callBtnText}>📞 Call</Text>
-            </TouchableOpacity>
-          </View>
+          <TripContactCard
+            title="Your driver"
+            name={trip.assigned_driver_name}
+            phone={trip.assigned_driver_phone}
+            avatarUrl={trip.assigned_driver_avatar_url}
+            vehiclePlate={trip.assigned_vehicle_plate}
+            vehicleModel={trip.assigned_vehicle_model}
+          />
 
           {/* Cancel Request Button for Staff */}
-          {activeTrip.status === 'ASSIGNED' && (
+          {trip.status === 'ASSIGNED' && (
             <TouchableOpacity style={styles.cancelRequestBtn} onPress={handleCancelTrip}>
               <Text style={styles.cancelRequestBtnText}>✕ Cancel Movement Request</Text>
             </TouchableOpacity>
@@ -570,8 +573,8 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
         </View>
       )}
 
-      {activeTrip.assigned_driver_name && !activeTrip.external_authorized && !activeTrip.staff_meter_started
-        && ['IN_TRANSIT', 'ARRIVED'].includes(activeTrip.status) && (
+      {trip.assigned_driver_name && !trip.external_authorized && !trip.staff_meter_started
+        && ['IN_TRANSIT', 'ARRIVED'].includes(trip.status) && (
         <View style={styles.fleetMeterCard}>
           <Text style={styles.fleetMeterTitle}>Start your ride</Text>
           <Text style={styles.fleetMeterHint}>
@@ -587,7 +590,7 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
         </View>
       )}
 
-      {activeTrip.staff_meter_started && !activeTrip.staff_meter_ended && activeTrip.status === 'IN_TRANSIT' && (
+      {trip.staff_meter_started && !trip.staff_meter_ended && trip.status === 'IN_TRANSIT' && (
         <View style={styles.fleetMeterCard}>
           <Text style={styles.fleetMeterTitle}>Trip in progress</Text>
           <TouchableOpacity
@@ -606,7 +609,7 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
           <View style={styles.pointGreenDot} />
           <View style={{ flex: 1 }}>
             <Text style={styles.routeLabel}>PICKUP</Text>
-            <Text style={styles.routeValue}>{activeTrip.pickup_location}</Text>
+            <Text style={styles.routeValue}>{trip.pickup_location}</Text>
           </View>
         </View>
 
@@ -616,7 +619,7 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
           <View style={styles.pointRedDot} />
           <View style={{ flex: 1 }}>
             <Text style={styles.routeLabel}>DESTINATION</Text>
-            <Text style={styles.routeValue}>{activeTrip.destination_location}</Text>
+            <Text style={styles.routeValue}>{trip.destination_location}</Text>
           </View>
         </View>
       </View>
@@ -1058,6 +1061,9 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
   },
   callBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     backgroundColor: colors.successMuted,
     borderWidth: 1,
     borderColor: colors.success,

@@ -13,8 +13,10 @@ import {
   updateAccident,
   recordExpense
 } from '../store/slices/fleetSlice.js';
-import { fetchProjects } from '../store/slices/projectSlice.js';
+import { fetchCountries, fetchProjects } from '../store/slices/projectSlice.js';
 import FleetMap from '../components/FleetMap.jsx';
+import useProjectMapFocus from '../hooks/useProjectMapFocus.js';
+import { pickProjectForUser } from '../utils/projectMapFocus.js';
 import {
   Truck,
   Car,
@@ -37,7 +39,6 @@ import { TableSkeleton } from '../components/ui/Skeleton.jsx';
 import LoadingButton from '../components/ui/LoadingButton.jsx';
 import AdminSectionHeader from '../components/admin/AdminSectionHeader.jsx';
 import AdminStatCard from '../components/admin/AdminStatCard.jsx';
-import FleetWorkersPanel from '../components/logistics/FleetWorkersPanel.jsx';
 import ProjectTripsPanel from '../components/trips/ProjectTripsPanel.jsx';
 import { apiRequest } from '../api/client.js';
 import {
@@ -45,30 +46,36 @@ import {
   driverShiftLabel,
   normalizeDriverShiftType
 } from '../constants/driverShifts.js';
+import { logisticsHeaderActionForSection } from '../constants/portalPermissions.js';
+import FleetWorkersPanel from '../components/logistics/FleetWorkersPanel.jsx';
 
 const LOGISTICS_SECTION_META = {
   map: { title: 'Live map', subtitle: 'Real-time fleet GPS and telemetry.', icon: Car },
   rides: { title: 'Trips', subtitle: 'All movement requests for your project (same view as master person).', icon: Car },
   vehicles: { title: 'Fleet inventory', subtitle: 'Register cars — day, night, or weekend shift.', icon: Truck },
-  workers: { title: 'Staff & drivers', subtitle: 'Create mobile logins for staff and drivers.', icon: Users },
   accidents: { title: 'Accidents & safety', subtitle: 'Incident records and follow-up.', icon: AlertTriangle },
-  drivers: { title: 'Driver shifts', subtitle: 'Edit driver working hours.', icon: Users },
+  drivers: {
+    title: 'Drivers',
+    subtitle: 'Register driver mobile logins and manage shift hours (staff → Master Person).',
+    icon: Users
+  },
   expenses: { title: 'Expenses', subtitle: 'Fuel and maintenance spend.', icon: DollarSign }
 };
 
 export default function LogisticsView() {
   const dispatch = useDispatch();
   const { liveFleet, liveDrivers, vehicles, drivers, schedules, expenses, expenseSummary, accidents = [], loading, saving: fleetSaving } = useSelector(state => state.fleet);
-  const [workerCounts, setWorkerCounts] = useState({ staff: 0, drivers: 0, total: 0 });
   const [savingDriverShift, setSavingDriverShift] = useState(false);
   const [savingVehicleShift, setSavingVehicleShift] = useState(false);
   const [savingExpense, setSavingExpense] = useState(false);
-  const { projects = [] } = useSelector(state => state.project);
-  const { user } = useSelector((state) => state.auth);
+  const { projects = [], countries = [] } = useSelector(state => state.project);
+  const { user, role } = useSelector((state) => state.auth);
   const { section: activeTab } = usePortalNav();
   const sectionMeta = LOGISTICS_SECTION_META[activeTab] || LOGISTICS_SECTION_META.map;
   const coordinatorProjectId =
     user?.project_id || user?.projectId || user?.project?.id || null;
+  const activeProject = pickProjectForUser(projects, coordinatorProjectId, countries);
+  const { mapView: projectMapView } = useProjectMapFocus(activeProject);
 
   // Modals
   const [showVehModal, setShowVehModal] = useState(false);
@@ -128,6 +135,7 @@ export default function LogisticsView() {
     dispatch(fetchExpenseSummary());
     dispatch(fetchAccidents());
     dispatch(fetchProjects());
+    dispatch(fetchCountries());
 
     // Auto-refresh live fleet every 15 seconds
     const interval = setInterval(() => {
@@ -292,16 +300,10 @@ export default function LogisticsView() {
         icon={sectionMeta.icon}
         title={sectionMeta.title}
         subtitle={sectionMeta.subtitle}
-        actions={
-          activeTab === 'rides' ? null : (
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setShowExpModal(true)}
-                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold flex items-center gap-1.5"
-              >
-                <DollarSign className="w-4 h-4 text-emerald-600" /> Record expense
-              </button>
+        actions={(() => {
+          const headerAction = logisticsHeaderActionForSection(activeTab, role);
+          if (headerAction === 'registerVehicle') {
+            return (
               <button
                 type="button"
                 onClick={() => setShowVehModal(true)}
@@ -309,9 +311,21 @@ export default function LogisticsView() {
               >
                 <Plus className="w-4 h-4" /> Register vehicle
               </button>
-            </div>
-          )
-        }
+            );
+          }
+          if (headerAction === 'recordExpense') {
+            return (
+              <button
+                type="button"
+                onClick={() => setShowExpModal(true)}
+                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold flex items-center gap-1.5"
+              >
+                <DollarSign className="w-4 h-4 text-emerald-600" /> Record expense
+              </button>
+            );
+          }
+          return null;
+        })()}
       />
 
       {activeTab === 'vehicles' && (
@@ -320,13 +334,6 @@ export default function LogisticsView() {
           <AdminStatCard icon={Truck} label="In transit" value={busyCount} tone="blue" />
           <AdminStatCard icon={Wrench} label="Maintenance" value={maintenanceCount} tone="amber" />
           <AdminStatCard icon={AlertTriangle} label="Accidents" value={accidentCount || accidents.length} tone="rose" />
-        </div>
-      )}
-      {activeTab === 'workers' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl">
-          <AdminStatCard icon={Users} label="Staff" value={workerCounts.staff} tone="brand" />
-          <AdminStatCard icon={Users} label="Drivers" value={workerCounts.drivers} tone="emerald" />
-          <AdminStatCard icon={Users} label="Total workers" value={workerCounts.total} tone="blue" />
         </div>
       )}
       {activeTab === 'drivers' && (
@@ -369,7 +376,13 @@ export default function LogisticsView() {
             <span className="text-xs font-mono text-slate-400">Auto-refresh: 15s</span>
           </div>
 
-          <FleetMap vehicles={liveFleet} drivers={liveDrivers} height="min(52vh, 520px)" showCitySearch />
+          <FleetMap
+            vehicles={liveFleet}
+            drivers={liveDrivers}
+            defaultMapView={projectMapView}
+            height="min(52vh, 520px)"
+            showCitySearch
+          />
         </div>
       )}
 
@@ -615,14 +628,11 @@ export default function LogisticsView() {
         </div>
       )}
 
-      {activeTab === 'workers' && (
-        <FleetWorkersPanel
-          onCountsChange={setWorkerCounts}
-          onDriversChanged={() => dispatch(fetchDrivers())}
-        />
+      {activeTab === 'drivers' && (
+        <FleetWorkersPanel driversOnly onDriversChanged={() => dispatch(fetchDrivers())} />
       )}
 
-      {/* Tab: Driver shift hours */}
+      {/* Tab: Driver roster & shifts */}
       {activeTab === 'drivers' && (
         <div className="glass-panel rounded-2xl overflow-hidden border border-slate-200">
           <div className="p-4 border-b border-slate-200 flex items-center justify-between">
@@ -877,7 +887,7 @@ export default function LogisticsView() {
                   <option value="IN_ACCIDENT">🚨 IN_ACCIDENT (Grounded for Incident Analysis)</option>
                   <option value="IN_REPAIR">🔧 IN_REPAIR (In Garage for Body/Engine Work)</option>
                   <option value="MAINTENANCE">⚙️ MAINTENANCE (Routine Service/Oil Change)</option>
-                  <option value="BUSY">🚗 BUSY (Active Trip)</option>
+                  <option value="BUSY">BUSY (Active Trip)</option>
                   <option value="OUT_OF_SERVICE">⛔ OUT_OF_SERVICE (Decommissioned)</option>
                 </select>
               </div>

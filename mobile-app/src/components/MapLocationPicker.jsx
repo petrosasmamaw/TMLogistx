@@ -11,6 +11,8 @@ import {
 import { WebView } from 'react-native-webview';
 import { colors } from '../theme/colors';
 import { buildLeafletPickerHtml } from '../utils/leafletMapHtml';
+import { getMapboxAccessToken, getMapboxLeafletTileOptions, getMapboxStyleId } from '../utils/mapbox';
+import { MapSkeleton } from './Skeleton';
 
 const MAP_HOST_ID = 'tmlogistx-map-picker-host';
 
@@ -78,9 +80,19 @@ export default function MapLocationPicker({
 
         const L = window.L;
         const map = L.map(host, { scrollWheelZoom: true }).setView([initialLat, initialLng], 14);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap'
-        }).addTo(map);
+        const mb = getMapboxLeafletTileOptions();
+        if (mb) {
+          L.tileLayer(mb.url, {
+            attribution: mb.attribution,
+            tileSize: mb.tileSize,
+            zoomOffset: mb.zoomOffset,
+            maxZoom: mb.maxZoom
+          }).addTo(map);
+        } else {
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+          }).addTo(map);
+        }
 
         const marker = L.marker([initialLat, initialLng], { draggable: true }).addTo(map);
         marker.on('dragend', () => {
@@ -117,7 +129,10 @@ export default function MapLocationPicker({
     onClose?.();
   };
 
-  const mapHtml = buildLeafletPickerHtml(initialLat, initialLng);
+  const mapHtml = buildLeafletPickerHtml(initialLat, initialLng, 14, {
+    accessToken: getMapboxAccessToken(),
+    style: getMapboxStyleId()
+  });
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -155,12 +170,7 @@ export default function MapLocationPicker({
               />
             ) : null}
 
-            {!ready && (
-              <View style={styles.loading}>
-                <ActivityIndicator color={colors.primary} size="large" />
-                <Text style={styles.loadingText}>Loading map…</Text>
-              </View>
-            )}
+            {!ready && <MapSkeleton height={280} />}
           </View>
 
           <Text style={styles.coords}>

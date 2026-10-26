@@ -1,7 +1,12 @@
-/** Inline Leaflet map for React Native WebView (OpenStreetMap — no Google API key). */
-export function buildLeafletPickerHtml(lat, lng, zoom = 14) {
+/** Inline Leaflet map for React Native WebView (Mapbox tiles when token is set). */
+export function buildLeafletPickerHtml(lat, lng, zoom = 14, options = {}) {
   const safeLat = Number(lat) || 9.02;
   const safeLng = Number(lng) || 38.75;
+  const token = options.accessToken || '';
+  const style = options.style || 'mapbox/streets-v12';
+  const tokenJson = JSON.stringify(token);
+  const styleJson = JSON.stringify(style);
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -21,11 +26,22 @@ export function buildLeafletPickerHtml(lat, lng, zoom = 14) {
     (function () {
       var startLat = ${safeLat};
       var startLng = ${safeLng};
+      var mapboxToken = ${tokenJson};
+      var mapboxStyle = ${styleJson};
       var map = L.map('map', { zoomControl: true, scrollWheelZoom: true }).setView([startLat, startLng], ${zoom});
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap'
-      }).addTo(map);
+      if (mapboxToken) {
+        L.tileLayer('https://api.mapbox.com/styles/v1/' + mapboxStyle + '/tiles/512/{z}/{x}/{y}@2x?access_token=' + mapboxToken, {
+          tileSize: 512,
+          zoomOffset: -1,
+          maxZoom: 22,
+          attribution: '&copy; Mapbox &copy; OpenStreetMap'
+        }).addTo(map);
+      } else {
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap'
+        }).addTo(map);
+      }
       var marker = L.marker([startLat, startLng], { draggable: true }).addTo(map);
       function post(lat, lng) {
         if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {

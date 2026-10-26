@@ -14,6 +14,39 @@
   @apply bg-white border border-slate-200 rounded-xl shadow-sm;
 }
 
+/* Leaflet map panes default to z-index 400+ — keep below modals (z-[10000]) */
+.fleet-map-root {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+}
+
+.fleet-map-root .leaflet-container,
+.fleet-map-root .leaflet-pane,
+.fleet-map-root .leaflet-top,
+.fleet-map-root .leaflet-bottom {
+  z-index: 1 !important;
+}
+
+.fleet-map-root .leaflet-control {
+  z-index: 2 !important;
+}
+
+.app-portal .portal-modal-backdrop,
+.login-shell .portal-modal-backdrop {
+  z-index: 10000 !important;
+}
+
+.app-portal .portal-modal-panel,
+.login-shell .portal-modal-panel {
+  z-index: 10001 !important;
+  position: relative;
+}
+
+.app-portal .fixed.inset-0.z-50.flex.items-center.justify-center {
+  z-index: 10000 !important;
+}
+
 .glass-panel-light {
   @apply bg-white border border-slate-200 rounded-lg;
 }

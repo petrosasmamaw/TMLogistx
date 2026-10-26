@@ -75,6 +75,11 @@ const authSlice = createSlice({
     },
     clearAuthError(state) {
       state.error = null;
+    },
+    patchStoredUser(state, action) {
+      if (!action.payload) return;
+      state.user = { ...state.user, ...action.payload };
+      localStorage.setItem('tmlogistx_user', JSON.stringify(state.user));
     }
   },
   extraReducers: (builder) => {
@@ -121,5 +126,5 @@ const authSlice = createSlice({
   }
 });
 
-export const { logout, clearAuthError } = authSlice.actions;
+export const { logout, clearAuthError, patchStoredUser } = authSlice.actions;
 export default authSlice.reducer;

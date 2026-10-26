@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
-import { getStore } from '../db/connection.js';
+import { getStore, queueStoreSave } from '../db/connection.js';
 import { logAudit } from '../middleware/audit.js';
 import {
   getAuthorizedProjectIds,
@@ -10,6 +10,9 @@ import {
 } from '../utils/projectScope.js';
 import { MOVEMENT_CENTER, MOVEMENT_OFFICER_LEGACY } from '../constants/roles.js';
 import { ensureDriverProfile } from '../utils/driverProfile.js';
+import { assertUniqueUserContact } from '../utils/userUniqueness.js';
+import { sendWelcomeCredentialsEmail } from '../utils/brevoMail.js';
+import { uploadProfileImage } from '../utils/cloudinaryUpload.js';
 
 export async function getUsers(req, res, next) {
   try {
@@ -130,8 +133,15 @@ export async function createUser(req, res, next) {
 
     const store = getStore();
 
-    if (store.users.some(u => u.email.toLowerCase() === email.trim().toLowerCase())) {
-      return res.status(400).json({ success: false, error: 'A user with this email address already exists' });
+    const requirePhone = ['STAFF', 'DRIVER'].includes(roleToSave);
+    try {
+      assertUniqueUserContact(store, {
+        email,
+        phone_number,
+        requirePhone
+      });
+    } catch (dupErr) {
+      return res.status(dupErr.status || 400).json({ success: false, error: dupErr.message });
     }
 
     // Role creation validation
@@ -164,11 +174,11 @@ export async function createUser(req, res, next) {
       }
 
     } else if (req.user.role === 'LOGISTICS_COORDINATOR') {
-      const allowedForFleetOps = ['STAFF', 'DRIVER'];
-      if (!allowedForFleetOps.includes(roleToSave)) {
+      if (roleToSave !== 'DRIVER') {
         return res.status(403).json({
           success: false,
-          error: 'You can only register staff and driver mobile accounts.'
+          error:
+            'Logistics coordinators can register driver mobile accounts only. Staff accounts are created by your Master Person.'
         });
       }
       const scopeId = getRequesterProjectId(req.user, store);
@@ -176,7 +186,7 @@ export async function createUser(req, res, next) {
       if (!targetProject || targetProject !== scopeId) {
         return res.status(403).json({
           success: false,
-          error: 'You can only create workers for your assigned project'
+          error: 'You can only create drivers for your assigned project'
         });
       }
     } else if (req.user.role !== 'SYSTEM_ADMIN') {
@@ -213,7 +223,23 @@ export async function createUser(req, res, next) {
       updated_at: new Date()
     };
 
+    if (req.body.avatar_image) {
+      try {
+        const url = await uploadProfileImage(req.body.avatar_image);
+        if (url) newUser.avatar_url = url;
+      } catch (avatarErr) {
+        console.error('[createUser] avatar upload failed:', avatarErr.message);
+      }
+    }
+
     store.users.push(newUser);
+    queueStoreSave();
+
+    try {
+      await sendWelcomeCredentialsEmail(newUser, password);
+    } catch (mailErr) {
+      console.error('[createUser] welcome email failed:', mailErr.message);
+    }
 
     let driverRecord = null;
     if (roleToSave === 'DRIVER') {
@@ -301,10 +327,42 @@ export async function updateUser(req, res, next) {
       return res.status(403).json({ success: false, error: 'Forbidden: Insufficient privileges' });
     }
 
+    if (req.body.email !== undefined && req.user.role === 'SYSTEM_ADMIN') {
+      try {
+        assertUniqueUserContact(store, {
+          email: req.body.email,
+          excludeUserId: user.id
+        });
+        user.email = String(req.body.email).trim().toLowerCase();
+      } catch (dupErr) {
+        return res.status(dupErr.status || 400).json({ success: false, error: dupErr.message });
+      }
+    }
+
     const oldValues = { ...user };
 
+    if (req.body.avatar_image) {
+      try {
+        const url = await uploadProfileImage(req.body.avatar_image);
+        if (url) user.avatar_url = url;
+      } catch (avatarErr) {
+        console.error('[updateUser] avatar upload failed:', avatarErr.message);
+      }
+    }
+
     if (full_name !== undefined) user.full_name = full_name.trim();
-    if (phone_number !== undefined) user.phone_number = phone_number.trim();
+    if (phone_number !== undefined) {
+      try {
+        assertUniqueUserContact(store, {
+          phone_number,
+          excludeUserId: user.id,
+          requirePhone: ['STAFF', 'DRIVER'].includes(user.role)
+        });
+      } catch (dupErr) {
+        return res.status(dupErr.status || 400).json({ success: false, error: dupErr.message });
+      }
+      user.phone_number = phone_number.trim();
+    }
     if (language_preference !== undefined && ['en', 'am'].includes(language_preference)) {
       user.language_preference = language_preference;
     }
@@ -406,6 +464,7 @@ export async function updateUser(req, res, next) {
     }
 
     user.updated_at = new Date();
+    queueStoreSave();
 
     await logAudit({
       userId: req.user.userId,

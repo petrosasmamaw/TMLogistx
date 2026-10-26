@@ -1,3 +1,5 @@
+import '@expo/metro-runtime';
+import './src/location/driverLocationTask';
 import { registerRootComponent } from 'expo';
 import App from './App';
 
