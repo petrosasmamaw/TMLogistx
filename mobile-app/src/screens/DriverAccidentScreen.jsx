@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
   },
   coordHint: { fontSize: 10, color: colors.textMuted, marginTop: 4, fontFamily: 'monospace' },
   emergencyBtn: {
-    backgroundColor: '#dc2626',
+    backgroundColor: colors.danger,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',

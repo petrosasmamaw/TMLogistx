@@ -766,39 +766,32 @@ export default function AdminView() {
             </>
           ) : (
           <>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="portal-stat-strip">
             {[
-              { key: 'ALL', label: 'All trips', value: rideStats.total, color: 'brand' },
-              { key: 'PENDING', label: 'Pending', value: rideStats.pending, color: 'amber' },
-              { key: 'ACTIVE', label: 'In progress', value: rideStats.active, color: 'blue' },
-              { key: 'EXTERNAL', label: 'Uber / RIDE', value: rideStats.external, color: 'violet' },
-              { key: 'COMPLETED', label: 'Completed', value: rideStats.completed, color: 'emerald' },
-              { key: 'CANCELLED', label: 'Cancelled', value: rideStats.cancelled, color: 'rose' }
+              { key: 'ALL', label: 'All trips', value: rideStats.total, tone: 'brand' },
+              { key: 'PENDING', label: 'Pending', value: rideStats.pending, tone: 'amber' },
+              { key: 'ACTIVE', label: 'In progress', value: rideStats.active, tone: 'blue' },
+              { key: 'EXTERNAL', label: 'Uber / RIDE', value: rideStats.external, tone: 'purple' },
+              { key: 'COMPLETED', label: 'Completed', value: rideStats.completed, tone: 'emerald' },
+              { key: 'CANCELLED', label: 'Cancelled', value: rideStats.cancelled, tone: 'rose' }
             ].map((card) => (
-              <button
+              <AdminStatCard
                 key={card.key}
-                type="button"
+                label={card.label}
+                value={card.value}
+                tone={card.tone}
+                active={rideStatusFilter === card.key}
                 onClick={() => setRideStatusFilter(card.key)}
-                className={`glass-panel p-4 rounded-xl text-left border transition-all ${
-                  rideStatusFilter === card.key ? 'border-brand-400 ring-2 ring-brand-100' : 'border-slate-200 hover:border-slate-300'
-                }`}
-              >
-                <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">{card.label}</div>
-                <div className="text-2xl font-bold text-slate-900 mt-1">{card.value}</div>
-              </button>
+              />
             ))}
           </div>
 
-          <div className="glass-panel rounded-2xl overflow-hidden border border-slate-200">
-            <div className="p-4 border-b border-slate-200 flex items-center justify-between">
-              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+          <div className="mb-6">
+            <div className="portal-table-title">
+              <span className="flex items-center gap-2">
                 <Car className="w-4 h-4 text-brand-600" /> Trip detail list
-              </h2>
-              <button
-                type="button"
-                onClick={loadRides}
-                className="text-xs font-semibold text-brand-600 hover:text-brand-700"
-              >
+              </span>
+              <button type="button" onClick={loadRides} className="portal-link">
                 Refresh
               </button>
             </div>

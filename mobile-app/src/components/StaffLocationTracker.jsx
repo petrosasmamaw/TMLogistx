@@ -1,8 +1,13 @@
 import React, { useEffect, useRef } from 'react';
-import { Alert, Platform } from 'react-native';
+import { AppState } from 'react-native';
 import * as Location from 'expo-location';
 import { useDispatch, useSelector } from 'react-redux';
 import { updateLocation } from '../store/gpsSlice';
+import { ensureLocationPermissionOnly } from '../utils/tripPermissions';
+import {
+  getFreshDevicePositionAsync,
+  watchLocationOptions,
+} from '../utils/deviceLocation';
 
 const INTERVAL_MS =
   Number(process.env.EXPO_PUBLIC_GPS_UPDATE_INTERVAL_MS) > 0
@@ -27,36 +32,35 @@ export default function StaffLocationTracker() {
           longitude: coords.longitude,
           accuracy: coords.accuracy,
           speedKmh: coords.speed != null ? Math.round(coords.speed * 3.6) : 0,
-          heading: coords.heading ?? 0
+          heading: coords.heading ?? 0,
         })
       );
     };
 
     const start = async () => {
-      const fg = await Location.requestForegroundPermissionsAsync();
-      if (fg.status !== 'granted') {
-        Alert.alert(
-          'Location',
-          'Allow location so your position shows correctly on the live trip map.'
-        );
-        return;
+      const allowed = await ensureLocationPermissionOnly({
+        purpose: 'your location on the live trip map',
+        promptSettings: false,
+      });
+      if (!allowed || cancelled) return;
+
+      if (watchRef.current?.remove) {
+        watchRef.current.remove();
+        watchRef.current = null;
       }
 
       try {
-        const pos = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced
-        });
+        const pos = await getFreshDevicePositionAsync();
         if (!cancelled) applyCoords(pos.coords);
       } catch {
         /* watch will retry */
       }
 
       watchRef.current = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.Balanced,
+        watchLocationOptions({
           timeInterval: INTERVAL_MS,
-          distanceInterval: 15
-        },
+          distanceInterval: 10,
+        }),
         (loc) => {
           if (!cancelled) applyCoords(loc.coords);
         }
@@ -64,9 +68,13 @@ export default function StaffLocationTracker() {
     };
 
     start();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') start();
+    });
 
     return () => {
       cancelled = true;
+      sub.remove();
       if (watchRef.current?.remove) watchRef.current.remove();
     };
   }, [dispatch, user?.role, user?.id]);

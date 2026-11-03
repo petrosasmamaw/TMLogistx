@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import BrandMark from '../components/BrandMark.jsx';
 import LoadingButton from '../components/ui/LoadingButton.jsx';
 import PasswordField from '../components/ui/PasswordField.jsx';
-import { fieldInput, fieldLabel } from '../components/ui/formClasses.js';
+import { fieldInput, fieldLabel, btnPrimary, alertError, alertSuccess } from '../components/ui/formClasses.js';
 import { apiRequest } from '../api/client.js';
 
 export default function ResetPasswordPage({ onDone }) {
@@ -39,27 +39,29 @@ export default function ResetPasswordPage({ onDone }) {
 
   if (!token) {
     return (
-      <div className="min-h-[100dvh] flex items-center justify-center p-6 text-center text-slate-600">
-        Invalid reset link. Request a new one from the sign-in page.
+      <div className="login-shell min-h-[100dvh] flex items-center justify-center p-6 text-center">
+        <p className="text-base font-bold text-ink">Invalid reset link. Request a new one from the sign-in page.</p>
       </div>
     );
   }
 
   return (
-    <div className="login-shell min-h-[100dvh] bg-gradient-to-b from-brand-50 via-slate-50 to-slate-100 flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-md">
+    <div className="login-shell min-h-[100dvh] flex flex-col items-center justify-center p-6">
+      <div className="w-full max-w-[420px]">
         <div className="flex flex-col items-center mb-6">
           <BrandMark size="lg" className="mb-3" />
-          <h1 className="text-xl font-bold text-slate-900">Set new password</h1>
+          <h1 className="text-2xl font-extrabold text-ink tracking-[-0.5px]">Set new password</h1>
         </div>
         {done ? (
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center space-y-4">
-            <p className="text-slate-700">Password updated successfully.</p>
-            <a href="/" className="inline-block text-brand-600 font-semibold">Sign in</a>
+          <div className="login-auth-sheet text-center space-y-4">
+            <p className={alertSuccess}>Password updated successfully.</p>
+            <a href="/" className="inline-block text-[13px] font-bold text-brand-600 min-h-[44px] leading-[44px]">
+              Sign in
+            </a>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4">
-            {error && <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
+          <form onSubmit={handleSubmit} className="login-auth-sheet space-y-4">
+            {error && <div className={alertError}>{error}</div>}
             <div>
               <label className={fieldLabel}>New password</label>
               <PasswordField
@@ -70,7 +72,7 @@ export default function ResetPasswordPage({ onDone }) {
                 inputClassName={fieldInput}
               />
             </div>
-            <LoadingButton type="submit" loading={loading} loadingLabel="Saving…" className="w-full bg-brand-600 text-white font-semibold rounded-xl py-3">
+            <LoadingButton type="submit" loading={loading} loadingLabel="Saving…" className={`w-full ${btnPrimary} min-h-[48px]`}>
               Update password
             </LoadingButton>
           </form>

@@ -329,7 +329,7 @@ export default function LogisticsView() {
       />
 
       {activeTab === 'vehicles' && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="portal-stat-strip">
           <AdminStatCard icon={Car} label="Available" value={availableCount} tone="emerald" />
           <AdminStatCard icon={Truck} label="In transit" value={busyCount} tone="blue" />
           <AdminStatCard icon={Wrench} label="Maintenance" value={maintenanceCount} tone="amber" />
@@ -337,22 +337,22 @@ export default function LogisticsView() {
         </div>
       )}
       {activeTab === 'drivers' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl">
+        <div className="portal-stat-strip max-w-2xl">
           <AdminStatCard icon={Users} label="Drivers on roster" value={drivers.length} tone="brand" />
         </div>
       )}
       {activeTab === 'accidents' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl">
+        <div className="portal-stat-strip max-w-2xl">
           <AdminStatCard icon={AlertTriangle} label="Incident records" value={accidents.length} tone="rose" />
         </div>
       )}
       {activeTab === 'expenses' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl">
+        <div className="portal-stat-strip max-w-2xl">
           <AdminStatCard icon={DollarSign} label="Expense entries" value={expenses.length} tone="amber" />
         </div>
       )}
       {activeTab === 'map' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl">
+        <div className="portal-stat-strip max-w-2xl">
           <AdminStatCard icon={Car} label="Live fleet signals" value={liveFleet.length} tone="blue" />
           <AdminStatCard icon={Car} label="Drivers on map" value={liveDrivers.length} tone="purple" />
         </div>

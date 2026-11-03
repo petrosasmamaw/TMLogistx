@@ -13,6 +13,10 @@ import {
   FALLBACK_MAP_CENTER,
   FALLBACK_MAP_LABEL
 } from '../utils/projectMapFocus.js';
+import {
+  shouldShowMovementCenterDestPin,
+  shouldShowMovementCenterPickupPin,
+} from '../utils/tripLocationRules.js';
 
 const MAPBOX_TOKEN = getMapboxAccessToken();
 
@@ -31,71 +35,62 @@ function distanceKm(lat1, lon1, lat2, lon2) {
   return parseFloat((R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(2));
 }
 
+// Custom map marker assets (same sizing as driver car: 28px)
+const CAR_MARKER_URL = '/car.png';
+const STAFF_MARKER_URL = '/staff-marker.png';
+const DEST_MARKER_URL = '/destination-marker.png';
+const TRIP_MARKER_SHADOW = 'drop-shadow(0 2px 5px rgba(15,31,25,.35))';
+const TRIP_MARKER_SIZE = 28;
+const DEST_MARKER_W = 28;
+const DEST_MARKER_H = 35;
+
 // Custom SVG Icons for Vehicle Markers
 function createVehicleIcon(status, isStale) {
-  let color = '#10b981'; // green for AVAILABLE
-  if (isStale || status === 'OFFLINE') color = '#64748b'; // gray for stale
-  else if (status === 'BUSY') color = '#3b82f6'; // blue for BUSY
-  else if (status === 'MAINTENANCE') color = '#f59e0b'; // amber for MAINTENANCE
-  else if (status === 'OUT_OF_SERVICE') color = '#ef4444'; // red for OUT_OF_SERVICE
-
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-      <circle cx="16" cy="16" r="14" fill="${color}" fill-opacity="0.25" stroke="${color}" stroke-width="2"/>
-      <circle cx="16" cy="16" r="10" fill="${color}"/>
-      <path d="M11 15 L14 11 L18 11 L21 15 L21 19 L19 19 L19 18 L13 18 L13 19 L11 19 Z" fill="#ffffff"/>
-      <circle cx="13.5" cy="18" r="1.5" fill="#0f172a"/>
-      <circle cx="18.5" cy="18" r="1.5" fill="#0f172a"/>
-    </svg>
-  `;
-
+  const size = 28;
+  const opacity = isStale || status === 'OFFLINE' ? 0.45 : 1;
   return L.divIcon({
-    html: svg,
+    html: `<img src="${CAR_MARKER_URL}" alt="" style="width:${size}px;height:${size}px;object-fit:contain;display:block;opacity:${opacity};filter:drop-shadow(0 2px 4px rgba(15,31,25,.35))" />`,
     className: 'custom-vehicle-marker',
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-    popupAnchor: [0, -16]
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -14]
+  });
+}
+
+function createTripStaffIcon() {
+  const size = TRIP_MARKER_SIZE;
+  return L.divIcon({
+    html: `<img src="${STAFF_MARKER_URL}" alt="" style="width:${size}px;height:${size}px;object-fit:contain;display:block;filter:${TRIP_MARKER_SHADOW}" />`,
+    className: 'custom-staff-marker',
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size - 2],
+    popupAnchor: [0, -size + 4],
+  });
+}
+
+function createTripDestinationIcon() {
+  const w = DEST_MARKER_W;
+  const h = DEST_MARKER_H;
+  return L.divIcon({
+    html: `<img src="${DEST_MARKER_URL}" alt="" style="width:${w}px;height:${h}px;object-fit:contain;display:block;filter:${TRIP_MARKER_SHADOW}" />`,
+    className: 'custom-dest-marker',
+    iconSize: [w, h],
+    iconAnchor: [w / 2, h - 2],
+    popupAnchor: [0, -h + 4],
   });
 }
 
 function createDriverIcon(status = 'AVAILABLE', highlighted = false) {
-  const busy = status === 'ON_TRIP' || status === 'BUSY';
-  const color = highlighted ? '#dc2626' : busy ? '#7c3aed' : '#0891b2';
+  const size = highlighted ? 34 : 28;
   const ring = highlighted
-    ? '<circle cx="16" cy="16" r="15" fill="none" stroke="#dc2626" stroke-width="3" stroke-opacity="0.85"/>'
+    ? 'outline:3px solid rgba(220,38,38,.85);outline-offset:2px;border-radius:4px;'
     : '';
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="${highlighted ? 40 : 34}" height="${highlighted ? 40 : 34}">
-      ${ring}
-      <circle cx="16" cy="16" r="14" fill="${color}" fill-opacity="0.3" stroke="${color}" stroke-width="2"/>
-      <circle cx="16" cy="12" r="5" fill="#fff"/>
-      <path d="M8 26c0-5 3.5-8 8-8s8 3 8 8" fill="#fff"/>
-    </svg>
-  `;
-  const size = highlighted ? 40 : 34;
   return L.divIcon({
-    html: svg,
+    html: `<img src="${CAR_MARKER_URL}" alt="" style="width:${size}px;height:${size}px;object-fit:contain;display:block;filter:drop-shadow(0 2px 4px rgba(15,31,25,.35));${ring}" />`,
     className: 'custom-driver-marker',
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
-    popupAnchor: [0, -16]
-  });
-}
-
-function createPinIcon(color = '#ef4444', label = 'P') {
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 32" width="24" height="32">
-      <path d="M12 0 C5.37 0 0 5.37 0 12 C0 21 12 32 12 32 C12 32 24 21 24 12 C24 5.37 18.63 0 12 0 Z" fill="${color}"/>
-      <circle cx="12" cy="11" r="5" fill="#ffffff"/>
-      <text x="12" y="14" font-size="8" font-family="sans-serif" font-weight="bold" fill="${color}" text-anchor="middle">${label}</text>
-    </svg>
-  `;
-  return L.divIcon({
-    html: svg,
-    className: 'custom-pin-marker',
-    iconSize: [24, 32],
-    iconAnchor: [12, 32],
-    popupAnchor: [0, -32]
+    popupAnchor: [0, -14]
   });
 }
 
@@ -280,8 +275,14 @@ export default function FleetMap({
     setViewAnimate(true);
   }, []);
 
-  const pickupCoords = selectedRequest?.pickup_lat ? [selectedRequest.pickup_lat, selectedRequest.pickup_lng] : null;
-  const destCoords = selectedRequest?.destination_lat ? [selectedRequest.destination_lat, selectedRequest.destination_lng] : null;
+  const pickupCoords =
+    selectedRequest && shouldShowMovementCenterPickupPin(selectedRequest) && selectedRequest.pickup_lat
+      ? [selectedRequest.pickup_lat, selectedRequest.pickup_lng]
+      : null;
+  const destCoords =
+    selectedRequest && shouldShowMovementCenterDestPin(selectedRequest) && selectedRequest.destination_lat
+      ? [selectedRequest.destination_lat, selectedRequest.destination_lng]
+      : null;
 
   useEffect(() => {
     if (pickupCoords && destCoords && MAPBOX_TOKEN) {
@@ -437,7 +438,7 @@ export default function FleetMap({
 
         {/* Request Pickup Pin */}
         {pickupCoords && (
-          <Marker position={pickupCoords} icon={createPinIcon('#2563eb', 'S')}>
+          <Marker position={pickupCoords} icon={createTripStaffIcon()} zIndexOffset={600}>
             <Popup>
               <div className="p-1 text-xs text-slate-900">
                 <div className="font-bold text-brand-600">Staff location (pickup)</div>
@@ -452,7 +453,7 @@ export default function FleetMap({
 
         {/* Request Destination Pin */}
         {destCoords && (
-          <Marker position={destCoords} icon={createPinIcon('#10b981', 'D')}>
+          <Marker position={destCoords} icon={createTripDestinationIcon()} zIndexOffset={550}>
             <Popup>
               <div className="p-1 text-xs text-slate-900">
                 <div className="font-bold text-emerald-600">Destination</div>

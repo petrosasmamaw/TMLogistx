@@ -18,14 +18,14 @@ export default function PortalShell({ children }) {
     permission !== 'unsupported';
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 flex font-sans">
+    <div className="min-h-screen bg-page text-ink flex font-sans">
       <Sidebar />
 
       <div className="flex-1 flex flex-col min-w-0 min-h-screen">
         <MobileHeader role={role} user={user} onLogout={handleLogout} />
 
         {showNotifBanner && (
-          <div className="mx-4 mt-3 lg:mx-6 p-3 rounded-xl border border-amber-200 bg-amber-50 text-xs text-amber-950 flex flex-wrap items-center justify-between gap-2">
+          <div className="notification-banner w-full px-9 py-2.5 text-[13px] font-semibold flex flex-wrap items-center justify-between gap-2 shrink-0">
             <span>
               {permission === 'denied'
                 ? 'Browser notifications are blocked. Allow them in site settings so new requests and arrivals appear instantly.'
@@ -42,7 +42,7 @@ export default function PortalShell({ children }) {
                 }
                 ask();
               }}
-              className="font-semibold underline hover:text-amber-800"
+              className="underline hover:opacity-90 min-h-[44px] inline-flex items-center"
             >
               {permission === 'denied' ? 'How to enable' : 'Allow notifications'}
             </button>
@@ -51,7 +51,7 @@ export default function PortalShell({ children }) {
 
         <main className="flex-1 app-portal portal-main overflow-x-hidden overflow-y-auto">{children}</main>
 
-        <footer className="border-t border-slate-200 bg-white py-2.5 px-4 lg:px-6 text-[10px] lg:text-xs text-slate-500 shrink-0 text-center lg:text-left">
+        <footer className="py-2.5 px-5 lg:px-9 text-xs text-mute shrink-0 text-center lg:text-left mt-8 lg:mt-0 border-t-0 lg:border-0 bg-transparent">
           TMLogistx · Staff Movement & Fleet Management
         </footer>
 

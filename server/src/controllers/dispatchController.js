@@ -807,7 +807,9 @@ export async function completeExternalRide(req, res, next) {
       fare_amount,
       currency = 'ETB',
       provider_name,
-      receipt_notes = ''
+      receipt_notes = '',
+      distance_km,
+      gps_tracked_distance_km,
     } = req.body;
 
     if (!request_id || fare_amount === undefined || fare_amount === null) {
@@ -837,8 +839,17 @@ export async function completeExternalRide(req, res, next) {
     const endLatitude = end_lat != null ? parseFloat(end_lat) : request.destination_lat;
     const endLongitude = end_lng != null ? parseFloat(end_lng) : request.destination_lng;
 
-    // Calculate actual distance traveled
-    const distanceKm = calculateDistanceKm(startLat, startLng, endLatitude, endLongitude);
+    // Prefer GPS odometer from staff app; fallback to straight-line estimate
+    const trackedKm =
+      gps_tracked_distance_km != null
+        ? parseFloat(gps_tracked_distance_km)
+        : distance_km != null
+          ? parseFloat(distance_km)
+          : null;
+    const distanceKm =
+      trackedKm != null && !Number.isNaN(trackedKm) && trackedKm > 0
+        ? parseFloat(trackedKm.toFixed(2))
+        : calculateDistanceKm(startLat, startLng, endLatitude, endLongitude);
     const cost = parseFloat(fare_amount) || 0.0;
     const now = new Date();
 

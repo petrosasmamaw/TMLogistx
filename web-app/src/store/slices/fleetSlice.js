@@ -139,6 +139,32 @@ const fleetSlice = createSlice({
           state.liveFleet[vIdx].is_stale = false;
         }
       }
+    },
+    releaseFleetResources(state, action) {
+      const { vehicleId, driverId } = action.payload || {};
+      if (vehicleId) {
+        const v = state.vehicles.find((x) => x.id === vehicleId);
+        if (v) v.operational_status = 'AVAILABLE';
+        const live = state.liveFleet.find((x) => x.id === vehicleId);
+        if (live) live.operational_status = 'AVAILABLE';
+      }
+      if (driverId) {
+        const d = state.drivers.find((x) => x.id === driverId);
+        if (d) d.availability_status = 'AVAILABLE';
+        const liveD = state.liveDrivers.find((x) => x.id === driverId);
+        if (liveD) liveD.availability_status = 'AVAILABLE';
+      }
+    },
+    markFleetOnTrip(state, action) {
+      const { vehicleId, driverId } = action.payload || {};
+      if (vehicleId) {
+        const v = state.vehicles.find((x) => x.id === vehicleId);
+        if (v) v.operational_status = 'BUSY';
+      }
+      if (driverId) {
+        const d = state.drivers.find((x) => x.id === driverId);
+        if (d) d.availability_status = 'ON_TRIP';
+      }
     }
   },
   extraReducers: (builder) => {
@@ -232,6 +258,7 @@ const fleetSlice = createSlice({
   }
 });
 
-export const { updateLiveLocation, updateLiveDriverLocation } = fleetSlice.actions;
+export const { updateLiveLocation, updateLiveDriverLocation, releaseFleetResources, markFleetOnTrip } =
+  fleetSlice.actions;
 export default fleetSlice.reducer;
 

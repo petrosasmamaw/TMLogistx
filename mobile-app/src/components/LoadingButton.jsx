@@ -1,6 +1,8 @@
 import React from 'react';
 import { TouchableOpacity, Text, ActivityIndicator, StyleSheet, View } from 'react-native';
 import { colors } from '../theme/colors';
+import { radius, spacing } from '../theme/layout';
+import { type } from '../theme/typography';
 
 export default function LoadingButton({
   onPress,
@@ -10,22 +12,39 @@ export default function LoadingButton({
   disabled,
   style,
   textStyle,
-  variant = 'primary'
+  variant = 'primary',
 }) {
   const isDisabled = disabled || loading;
-  const bg = variant === 'primary' ? colors.primary : colors.bgTertiary;
-  const textColor = variant === 'primary' ? '#fff' : colors.textPrimary;
+  const isPrimary = variant === 'primary';
+  const isDanger = variant === 'danger';
+
+  const bg = isDanger ? colors.danger : isPrimary ? colors.primary : 'transparent';
+  const textColor = isPrimary || isDanger ? colors.onPrimary : colors.ink;
+  const outline = variant === 'secondary';
 
   return (
     <TouchableOpacity
       onPress={onPress}
       disabled={isDisabled}
-      activeOpacity={0.85}
-      style={[styles.btn, { backgroundColor: bg, opacity: isDisabled ? 0.65 : 1 }, style]}
+      activeOpacity={0.88}
+      style={[
+        styles.btn,
+        { backgroundColor: bg, opacity: isDisabled ? 0.45 : 1 },
+        outline && styles.outline,
+        style,
+      ]}
     >
       <View style={styles.row}>
-        {loading && <ActivityIndicator size="small" color={textColor} style={styles.spinner} />}
-        <Text style={[styles.text, { color: textColor }, textStyle]}>
+        {loading && (
+          <ActivityIndicator size={20} color={textColor} style={styles.spinner} />
+        )}
+        <Text
+          style={[
+            isPrimary || isDanger ? type.buttonPrimary : type.buttonOutline,
+            { color: textColor },
+            textStyle,
+          ]}
+        >
           {loading && loadingLabel ? loadingLabel : label}
         </Text>
       </View>
@@ -35,22 +54,25 @@ export default function LoadingButton({
 
 const styles = StyleSheet.create({
   btn: {
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    width: '100%',
+    minHeight: 54,
+    borderRadius: radius.button,
+    paddingHorizontal: spacing.sheet,
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    marginTop: spacing.xxl,
+  },
+  outline: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: colors.line,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
   },
   spinner: {
-    marginRight: 8
+    marginRight: 8,
   },
-  text: {
-    fontSize: 15,
-    fontWeight: '800'
-  }
 });

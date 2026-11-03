@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, Modal, TouchableOpacity, StyleSheet, Pressable } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { switchDemoProfile, DEMO_PROFILES } from '../store/authSlice';
 import { colors } from '../theme/colors';
@@ -16,18 +17,16 @@ export const QuickRolePicker = ({ visible, onClose }) => {
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>⚡ {t('quickSwitchTitle')}</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <Text style={styles.closeBtnText}>✕</Text>
+            <View style={styles.titleRow}>
+              <Ionicons name="flash" size={20} color={colors.primary} />
+              <Text style={styles.modalTitle}>{t('quickSwitchTitle')}</Text>
+            </View>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close">
+              <Ionicons name="close" size={22} color={colors.mute} />
             </TouchableOpacity>
           </View>
 
@@ -46,29 +45,38 @@ export const QuickRolePicker = ({ visible, onClose }) => {
                   style={[
                     styles.profileCard,
                     isSelected && styles.profileCardActive,
-                    isDriver ? styles.driverBorder : styles.staffBorder
+                    isDriver ? styles.driverBorder : styles.staffBorder,
                   ]}
                   onPress={() => handleSelect(profile)}
                   activeOpacity={0.7}
                 >
                   <View style={styles.cardHeader}>
-                    <View style={styles.roleTag}>
+                    <View style={styles.roleTagRow}>
+                      <Ionicons
+                        name={isDriver ? 'car-sport' : 'person'}
+                        size={14}
+                        color={isDriver ? colors.amber : colors.primary}
+                      />
                       <Text style={[styles.roleTagText, isDriver ? styles.driverTagText : styles.staffTagText]}>
-                        {isDriver ? '🚗 ' + t('role_DRIVER') : '👤 ' + t('role_STAFF_MEMBER')}
+                        {isDriver ? t('role_DRIVER') : t('role_STAFF_MEMBER')}
                       </Text>
                     </View>
-                    {isSelected && (
+                    {isSelected ? (
                       <View style={styles.activePill}>
                         <Text style={styles.activePillText}>CURRENT ACTIVE</Text>
                       </View>
-                    )}
+                    ) : null}
                   </View>
 
                   <Text style={styles.userName}>{profile.full_name}</Text>
                   <Text style={styles.userEmail}>{profile.email}</Text>
-                  <Text style={styles.projectInfo}>
-                    📍 {profile.project_name} {profile.vehicle_plate ? `• ${profile.vehicle_plate}` : ''}
-                  </Text>
+                  <View style={styles.projectRow}>
+                    <Ionicons name="location-outline" size={14} color={colors.mute} />
+                    <Text style={styles.projectInfo}>
+                      {profile.project_name}
+                      {profile.vehicle_plate ? ` • ${profile.vehicle_plate}` : ''}
+                    </Text>
+                  </View>
                 </TouchableOpacity>
               );
             })}
@@ -102,6 +110,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   modalTitle: {
     color: colors.textPrimary,
     fontSize: 18,
@@ -109,11 +118,6 @@ const styles = StyleSheet.create({
   },
   closeBtn: {
     padding: 4,
-  },
-  closeBtnText: {
-    color: colors.textSecondary,
-    fontSize: 18,
-    fontWeight: '700',
   },
   modalSubtitle: {
     color: colors.textSecondary,
@@ -149,7 +153,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 4,
   },
-  roleTag: {},
+  roleTagRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   roleTagText: {
     fontSize: 11,
     fontWeight: '700',
@@ -180,13 +184,19 @@ const styles = StyleSheet.create({
   },
   userEmail: {
     color: colors.textSecondary,
-    fontSize: 12,
-    marginTop: 1,
+    fontSize: 13,
+    marginTop: 2,
+  },
+  projectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
   },
   projectInfo: {
     color: colors.textMuted,
-    fontSize: 11,
-    marginTop: 6,
+    fontSize: 12,
+    flex: 1,
   },
 });
 

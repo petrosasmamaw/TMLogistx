@@ -1,25 +1,40 @@
-import { Alert, Linking, Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
+import { Alert, Platform, PermissionsAndroid } from 'react-native';
+import { openAppSettings, openNotificationSettings } from '../utils/openDeviceSettings';
+import { setNotificationHandler } from 'expo-notifications/build/NotificationsHandler';
+import {
+  getPermissionsAsync,
+  requestPermissionsAsync,
+} from 'expo-notifications/build/NotificationPermissions';
+import { scheduleNotificationAsync } from 'expo-notifications/build/scheduleNotificationAsync';
+import { setNotificationChannelAsync } from 'expo-notifications/build/setNotificationChannelAsync';
+import { AndroidImportance } from 'expo-notifications/build/NotificationChannelManager.types';
 
 const ANDROID_CHANNEL_ID = 'trip-updates';
 const IS_WEB = Platform.OS === 'web';
 const SETTINGS_PROMPT_INTERVAL_MS = 5 * 60 * 1000;
 const DEDUPE_TTL_MS = 10 * 60 * 1000;
 
-if (!IS_WEB) {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false
-    })
-  });
-}
-
+let handlerReady = false;
 let channelReady = false;
 let lastSettingsPrompt = 0;
 const sentKeys = new Map();
 const permissionListeners = new Set();
+
+function ensureHandler() {
+  if (IS_WEB || handlerReady) return;
+  try {
+    setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+      }),
+    });
+    handlerReady = true;
+  } catch {
+    /* Expo Go may lack some native pieces; local schedule still works when available */
+  }
+}
 
 function emitPermission(status) {
   permissionListeners.forEach((fn) => {
@@ -42,14 +57,15 @@ function webSupported() {
 
 async function ensureAndroidChannel() {
   if (Platform.OS !== 'android' || channelReady) return;
-  await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
+  ensureHandler();
+  await setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
     name: 'Trip updates',
-    importance: Notifications.AndroidImportance.MAX,
+    importance: AndroidImportance.MAX,
     vibrationPattern: [0, 200, 120, 200],
-    lightColor: '#2563eb',
+    lightColor: '#0b7a5a',
     sound: 'default',
     enableVibrate: true,
-    showBadge: true
+    showBadge: true,
   });
   channelReady = true;
 }
@@ -61,19 +77,20 @@ export async function getNotificationPermission() {
     return window.Notification.permission;
   }
   try {
-    const { status, canAskAgain } = await Notifications.getPermissionsAsync();
+    ensureHandler();
+    const { status, canAskAgain } = await getPermissionsAsync();
     if (status === 'granted') return 'granted';
     if (status === 'denied' && canAskAgain === false) return 'denied';
-    return status === 'denied' ? 'denied' : 'default';
+    return 'default';
   } catch {
     return 'unsupported';
   }
 }
 
-function promptOpenSettings() {
+function promptOpenSettings(force = false) {
   if (IS_WEB) return;
   const now = Date.now();
-  if (now - lastSettingsPrompt < SETTINGS_PROMPT_INTERVAL_MS) return;
+  if (!force && now - lastSettingsPrompt < SETTINGS_PROMPT_INTERVAL_MS) return;
   lastSettingsPrompt = now;
   Alert.alert(
     'Turn on notifications',
@@ -83,19 +100,105 @@ function promptOpenSettings() {
       {
         text: 'Open settings',
         onPress: () => {
-          if (Platform.OS === 'ios') Linking.openURL('app-settings:');
-          else Linking.openSettings();
-        }
-      }
+          void openNotificationSettings();
+        },
+      },
     ]
   );
 }
 
-/**
- * Ask the OS / browser for permission. When already blocked, points the user to settings
- * (native only; browsers need the site-settings banner instead).
- */
-export async function ensureNotificationPermission({ promptSettings = true } = {}) {
+async function requestAndroidPostNotifications() {
+  if (Platform.OS !== 'android') return true;
+  const apiLevel =
+    typeof Platform.Version === 'number' ? Platform.Version : parseInt(String(Platform.Version), 10);
+  if (!apiLevel || apiLevel < 33) return true;
+  try {
+    const perm = PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS;
+    const already = await PermissionsAndroid.check(perm);
+    if (already) return true;
+    const result = await PermissionsAndroid.request(perm, {
+      title: 'Allow notifications',
+      message: 'Get trip assignments, driver arrival, and trip update alerts.',
+      buttonPositive: 'Allow',
+      buttonNegative: 'Not now',
+    });
+    return result === PermissionsAndroid.RESULTS.GRANTED;
+  } catch {
+    return false;
+  }
+}
+
+function permissionFromExpoResult(result) {
+  if (result?.status === 'granted') return 'granted';
+  if (result?.status === 'denied' && result?.canAskAgain === false) return 'denied';
+  return 'default';
+}
+
+/** System dialog when possible; settings when blocked. */
+export async function requestNotificationAccess({ fromSettingsButton = false } = {}) {
+  if (IS_WEB) {
+    return ensureNotificationPermission({ promptSettings: false });
+  }
+
+  ensureHandler();
+  try {
+    await ensureAndroidChannel();
+  } catch {
+    /* Expo Go may fail channel setup; permission dialog can still work */
+  }
+
+  let existing;
+  try {
+    existing = await getPermissionsAsync();
+  } catch {
+    emitPermission('unsupported');
+    Alert.alert(
+      'Notifications unavailable',
+      'This build cannot request notifications. Use a dev build or enable notifications for Expo Go in system settings.'
+    );
+    return false;
+  }
+
+  if (existing.status === 'granted') {
+    emitPermission('granted');
+    return true;
+  }
+
+  const blocked = existing.status === 'denied' && existing.canAskAgain === false;
+  if (blocked || fromSettingsButton) {
+    await openNotificationSettings();
+    const after = await getNotificationPermission();
+    emitPermission(after);
+    return after === 'granted';
+  }
+
+  await requestAndroidPostNotifications();
+
+  try {
+    const requested = await requestPermissionsAsync({
+      ios: { allowAlert: true, allowBadge: true, allowSound: true },
+    });
+    const granted = requested.status === 'granted';
+    emitPermission(permissionFromExpoResult(requested));
+    if (!granted && requested.canAskAgain === false) {
+      promptOpenSettings(true);
+    }
+    return granted;
+  } catch {
+    const after = await getNotificationPermission();
+    emitPermission(after);
+    return after === 'granted';
+  }
+}
+
+export { openNotificationSettings };
+
+export async function ensureNotificationPermission({
+  promptSettings = true,
+  forceSettingsPrompt = false,
+  askLocationToo = false,
+  locationPurpose = 'live trip updates on the map',
+} = {}) {
   if (IS_WEB) {
     if (!webSupported()) return false;
     const current = window.Notification.permission;
@@ -118,30 +221,46 @@ export async function ensureNotificationPermission({ promptSettings = true } = {
   }
 
   try {
-    await ensureAndroidChannel();
-    const existing = await Notifications.getPermissionsAsync();
+    ensureHandler();
+    try {
+      await ensureAndroidChannel();
+    } catch {
+      /* continue */
+    }
+    const existing = await getPermissionsAsync();
     if (existing.status === 'granted') {
       emitPermission('granted');
       return true;
     }
     if (existing.canAskAgain !== false) {
-      const requested = await Notifications.requestPermissionsAsync({
-        ios: { allowAlert: true, allowBadge: true, allowSound: true }
+      await requestAndroidPostNotifications();
+      const requested = await requestPermissionsAsync({
+        ios: { allowAlert: true, allowBadge: true, allowSound: true },
       });
       if (requested.status === 'granted') {
         emitPermission('granted');
         return true;
       }
+      emitPermission(permissionFromExpoResult(requested));
+    } else {
+      emitPermission('denied');
     }
-    emitPermission('denied');
-    if (promptSettings) promptOpenSettings();
+    if (promptSettings) promptOpenSettings(forceSettingsPrompt);
+    if (askLocationToo) {
+      const { ensureLocationAndNotifications } = await import('../utils/tripPermissions.js');
+      await ensureLocationAndNotifications(locationPurpose);
+    }
     return false;
   } catch {
     return false;
   }
 }
 
-/** Show a notification now. Never opens permission dialogs (safe to call from socket handlers). */
+async function ensureNotificationThenLocation(locationPurpose) {
+  const { ensureLocationAndNotifications } = await import('../utils/tripPermissions.js');
+  await ensureLocationAndNotifications(locationPurpose);
+}
+
 export async function notifyLocal(title, body) {
   if (IS_WEB) {
     if (!webSupported() || window.Notification.permission !== 'granted') return false;
@@ -149,7 +268,7 @@ export async function notifyLocal(title, body) {
       const n = new window.Notification(title, {
         body,
         tag: `tmlogistx-${Date.now()}`,
-        icon: '/favicon.ico'
+        icon: '/favicon.ico',
       });
       n.onclick = () => {
         window.focus();
@@ -162,17 +281,18 @@ export async function notifyLocal(title, body) {
   }
 
   try {
-    const { status } = await Notifications.getPermissionsAsync();
+    ensureHandler();
+    const { status } = await getPermissionsAsync();
     if (status !== 'granted') return false;
     await ensureAndroidChannel();
-    await Notifications.scheduleNotificationAsync({
+    await scheduleNotificationAsync({
       content: {
         title,
         body,
         sound: true,
-        ...(Platform.OS === 'android' ? { channelId: ANDROID_CHANNEL_ID } : {})
+        ...(Platform.OS === 'android' ? { channelId: ANDROID_CHANNEL_ID } : {}),
       },
-      trigger: null
+      trigger: null,
     });
     return true;
   } catch {
@@ -180,14 +300,19 @@ export async function notifyLocal(title, body) {
   }
 }
 
-/** Same event from socket + list refresh (or project room + user room) only notifies once. */
-export function notifyOnce(key, title, body) {
+export async function notifyOnce(key, title, body, options = {}) {
+  const { locationPurpose = 'trip alerts and your location on the map' } = options;
+  const perm = await getNotificationPermission();
+  if (perm !== 'granted') {
+    await ensureNotificationThenLocation(locationPurpose);
+  }
+
   if (!key) return notifyLocal(title, body);
   const now = Date.now();
   for (const [k, ts] of sentKeys) {
     if (now - ts > DEDUPE_TTL_MS) sentKeys.delete(k);
   }
-  if (sentKeys.has(key)) return Promise.resolve(false);
+  if (sentKeys.has(key)) return false;
   sentKeys.set(key, now);
   return notifyLocal(title, body);
 }

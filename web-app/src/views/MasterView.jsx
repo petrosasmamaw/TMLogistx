@@ -116,7 +116,7 @@ export default function MasterView() {
         <>
           {activeTab === 'overview' && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="portal-stat-strip">
                 <AdminStatCard icon={Users} label="Workers" value={projectWorkers.length} tone="brand" />
                 <AdminStatCard icon={Car} label="Trips" value={requests.length} tone="purple" />
                 <AdminStatCard icon={Truck} label="Vehicles" value={vehicles.length} tone="blue" />

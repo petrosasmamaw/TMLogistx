@@ -1,11 +1,13 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
+import { type } from '../theme/typography';
 
 const STEPS = [
   { key: 'ARRIVED', label: 'Arrive' },
   { key: 'IN_TRANSIT', label: 'Start' },
-  { key: 'COMPLETED', label: 'End' }
+  { key: 'COMPLETED', label: 'End' },
 ];
 
 function stepIndex(status) {
@@ -15,25 +17,46 @@ function stepIndex(status) {
   return 0;
 }
 
-export default function DriverThreeStepStepper({ currentStatus }) {
+export default function DriverThreeStepStepper({ currentStatus, compact = false }) {
   const done = stepIndex(currentStatus);
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, compact && styles.rowCompact]}>
       {STEPS.map((step, i) => {
         const n = i + 1;
         const isDone = done >= n;
-        const isActive = done === n - 1 && currentStatus !== 'COMPLETED' && n === done + 1;
-        const active = isActive || (done === 0 && n === 1 && ['ACCEPTED', 'ASSIGNED'].includes(currentStatus));
+        const isActive =
+          (done === n - 1 && currentStatus !== 'COMPLETED' && n === done + 1) ||
+          (done === 0 && n === 1 && ['ACCEPTED', 'HEADING_TO_PICKUP'].includes(currentStatus));
+
         return (
           <View key={step.key} style={styles.item}>
-            <View style={[styles.dot, isDone && styles.dotDone, active && styles.dotActive]}>
-              <Text style={[styles.dotText, (isDone || active) && styles.dotTextOn]}>
-                {isDone ? '✓' : n}
-              </Text>
+            {i > 0 ? (
+              <View style={[styles.line, compact && styles.lineCompact, isDone && styles.lineDone]} />
+            ) : null}
+            <View
+              style={[
+                styles.dot,
+                compact && styles.dotCompact,
+                isDone && styles.dotDone,
+                isActive && styles.dotActive,
+                isActive && (compact ? styles.dotRingCompact : styles.dotRing),
+              ]}
+            >
+              {isDone ? (
+                <Ionicons name="checkmark" size={compact ? 10 : 12} color={colors.onPrimary} />
+              ) : (
+                <Text style={[styles.dotText, compact && styles.dotTextCompact, isActive && styles.dotTextOn]}>
+                  {n}
+                </Text>
+              )}
             </View>
-            <Text style={[styles.label, (isDone || active) && styles.labelOn]}>{step.label}</Text>
-            {i < STEPS.length - 1 && <View style={[styles.line, isDone && styles.lineDone]} />}
+            <Text
+              style={[styles.label, compact && styles.labelCompact, (isDone || isActive) && styles.labelOn]}
+              numberOfLines={1}
+            >
+              {step.label}
+            </Text>
           </View>
         );
       })}
@@ -46,59 +69,81 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    paddingVertical: 8
+    marginVertical: 6,
+    marginBottom: 14,
+  },
+  rowCompact: {
+    marginVertical: 0,
+    marginBottom: 0,
   },
   item: {
     flex: 1,
     alignItems: 'center',
-    position: 'relative'
+    position: 'relative',
   },
   dot: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: colors.borderSecondary,
-    backgroundColor: colors.bgTertiary,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.line,
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    marginBottom: 6,
+    zIndex: 1,
+  },
+  dotCompact: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    marginBottom: 3,
   },
   dotDone: {
-    backgroundColor: colors.success,
-    borderColor: colors.success
+    backgroundColor: colors.primary,
   },
   dotActive: {
-    backgroundColor: colors.amber,
-    borderColor: colors.amberLight
+    backgroundColor: colors.live,
+  },
+  dotRing: {
+    borderWidth: 5,
+    borderColor: colors.liveRing,
+  },
+  dotRingCompact: {
+    borderWidth: 3,
+    borderColor: colors.liveRing,
   },
   dotText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: colors.textMuted
+    ...type.badge,
+    color: colors.mute,
+  },
+  dotTextCompact: {
+    fontSize: 10,
   },
   dotTextOn: {
-    color: '#000'
+    color: colors.onPrimary,
   },
   label: {
-    marginTop: 6,
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted
+    ...type.badge,
+    color: colors.mute,
+  },
+  labelCompact: {
+    fontSize: 10,
   },
   labelOn: {
-    color: colors.textPrimary,
-    fontWeight: '800'
+    color: colors.ink,
   },
   line: {
     position: 'absolute',
-    top: 16,
-    left: '58%',
-    width: '84%',
+    top: 10,
+    left: '-50%',
+    width: '100%',
     height: 2,
-    backgroundColor: colors.borderPrimary,
-    zIndex: -1
+    backgroundColor: colors.line,
+    zIndex: 0,
+  },
+  lineCompact: {
+    top: 8,
   },
   lineDone: {
-    backgroundColor: colors.success
-  }
+    backgroundColor: colors.primary,
+  },
 });

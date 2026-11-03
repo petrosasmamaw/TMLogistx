@@ -5,7 +5,7 @@ import { loginUser, clearAuthError } from '../store/slices/authSlice.js';
 import BrandMark from '../components/BrandMark.jsx';
 import LoadingButton from '../components/ui/LoadingButton.jsx';
 import PasswordField from '../components/ui/PasswordField.jsx';
-import { fieldInput, fieldLabel } from '../components/ui/formClasses.js';
+import { fieldInput, fieldLabel, btnPrimary, alertError } from '../components/ui/formClasses.js';
 
 export default function LoginPage() {
   const dispatch = useDispatch();
@@ -25,25 +25,18 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="login-shell min-h-[100dvh] bg-gradient-to-b from-brand-50 via-slate-50 to-slate-100 flex flex-col lg:items-center lg:justify-center p-4 sm:p-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[env(safe-area-inset-bottom)]">
-      <div className="w-full max-w-md mx-auto flex-1 flex flex-col justify-center lg:flex-none lg:justify-start">
+    <div className="login-shell min-h-[100dvh] flex flex-col items-center justify-center p-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[env(safe-area-inset-bottom)]">
+      <div className="w-full max-w-[420px] mx-auto flex flex-col">
         <div className="flex flex-col items-center mb-8">
           <BrandMark size="lg" className="mb-4" />
-          <h1 className="text-2xl font-bold text-slate-900">TMLogistx Portal</h1>
-          <p className="text-sm text-slate-500 mt-1 text-center">
+          <h1 className="text-2xl font-extrabold text-ink tracking-[-0.5px]">TMLogistx Portal</h1>
+          <p className="text-sm text-mute mt-1 text-center max-w-[320px] font-medium">
             Sign in with the account your administrator created for you.
           </p>
         </div>
 
-        <form
-          onSubmit={handleSubmit}
-          className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 sm:p-6 space-y-4"
-        >
-          {error && (
-            <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-              {error}
-            </div>
-          )}
+        <form onSubmit={handleSubmit} className="login-auth-sheet space-y-4">
+          {error && <div className={alertError}>{error}</div>}
 
           <div>
             <label className={fieldLabel}>Email</label>
@@ -76,7 +69,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => setView('forgot')}
-              className="text-xs font-semibold text-brand-600 hover:text-brand-700"
+              className="text-[13px] font-bold text-brand-600 hover:text-brand-700 my-2.5"
             >
               Forgot password?
             </button>
@@ -86,13 +79,13 @@ export default function LoginPage() {
             type="submit"
             loading={loading}
             loadingLabel="Signing in…"
-            className="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl py-3 text-sm transition-colors shadow-md shadow-brand-500/20"
+            className={`w-full ${btnPrimary} min-h-[48px]`}
           >
             Sign in
           </LoadingButton>
         </form>
 
-        <p className="text-center text-xs text-slate-400 mt-6">
+        <p className="text-center text-[13px] text-mute mt-6 font-medium">
           Staff and drivers: use the TMLogistx mobile app with your assigned credentials.
         </p>
       </div>

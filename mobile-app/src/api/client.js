@@ -1,33 +1,8 @@
 // TMLogistx Mobile API Client with Automatic Bearer Token & Offline Fallback Support
-import { Platform } from 'react-native';
 import { mapApiRequestToMobile } from '../utils/mapApiTrip.js';
+import { resolveApiBaseUrl } from '../utils/resolveApiBaseUrl.js';
 
-/**
- * 10.0.2.2 = Android emulator → host machine only (not valid in Expo web or on a real phone).
- * Web / iOS simulator → localhost. Physical device → set LAN IP in mobile-app/.env.
- */
-const getPlatformUrl = () => {
-  const fromEnv =
-    typeof process !== 'undefined' && process.env && process.env.EXPO_PUBLIC_API_BASE_URL
-      ? process.env.EXPO_PUBLIC_API_BASE_URL.trim()
-      : '';
-
-  if (Platform.OS === 'web') {
-    if (fromEnv && !fromEnv.includes('10.0.2.2')) return fromEnv.replace(/\/$/, '');
-    return 'http://localhost:5000/api';
-  }
-
-  if (Platform.OS === 'android') {
-    if (fromEnv) return fromEnv.replace(/\/$/, '');
-    return 'http://10.0.2.2:5000/api';
-  }
-
-  // iOS simulator & other native
-  if (fromEnv && !fromEnv.includes('10.0.2.2')) return fromEnv.replace(/\/$/, '');
-  return 'http://localhost:5000/api';
-};
-
-export const API_BASE_URL = getPlatformUrl();
+export const API_BASE_URL = resolveApiBaseUrl();
 
 let currentToken = null;
 
@@ -202,7 +177,14 @@ export const apiClient = {
     if (endpoint === '/dispatch/complete-external' && options.method === 'POST') {
       const { request_id, fare_amount, currency = 'ETB', receipt_notes = '', end_lat, end_lng } = body;
       const trip = mockTrips.find(t => t.id === request_id || t.request_number === request_id);
-      const dist = 5.8; // calculated fallback distance
+      const fallbackDist = 5.8;
+      const trackedDist =
+        body.gps_tracked_distance_km != null
+          ? parseFloat(body.gps_tracked_distance_km)
+          : body.distance_km != null
+            ? parseFloat(body.distance_km)
+            : fallbackDist;
+      const dist = Number.isFinite(trackedDist) && trackedDist > 0 ? trackedDist : fallbackDist;
       if (trip) {
         trip.status = 'COMPLETED';
         trip.external_status = 'COMPLETED';

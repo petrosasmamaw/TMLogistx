@@ -1,23 +1,24 @@
 import React from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { Image, StyleSheet } from 'react-native';
 
 const source = require('../../assets/brand-mark.png');
 
-/**
- * Same gradient truck mark as the web portal (Sidebar / Login).
- */
-export default function BrandLogo({ size = 56, style }) {
+/** TM monogram — transparent, no frame; pass width/height for wide logo aspect. */
+export default function BrandLogo({ size = 56, width, height, style }) {
+  const w = width ?? size;
+  const h = height ?? Math.round(size * 0.78);
   return (
-    <View style={[styles.wrap, { width: size, height: size, borderRadius: size * 0.22 }, style]}>
-      <Image source={source} style={{ width: size, height: size }} resizeMode="contain" accessibilityLabel="TMLogistx" />
-    </View>
+    <Image
+      source={source}
+      style={[styles.image, { width: w, height: h }, style]}
+      resizeMode="contain"
+      accessibilityLabel="TMLogistx"
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
+  image: {
+    backgroundColor: 'transparent',
   },
 });

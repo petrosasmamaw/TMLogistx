@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import useStaffActiveTrip from '../hooks/useStaffActiveTrip';
 import {
   View,
@@ -23,27 +23,22 @@ import {
 import { colors } from '../theme/colors';
 import { useTranslation } from '../i18n';
 import StatusBadge from '../components/StatusBadge';
-import TripPipelineStepper from '../components/TripPipelineStepper';
 import TripLiveMap from '../components/TripLiveMap';
 import apiClient from '../api/client';
 import AnimatedTripCard from '../components/AnimatedTripCard';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveRideSkeleton } from '../components/Skeleton';
 import { formatDistanceDisplay } from '../utils/geo';
+import { getCoordinationMessage } from '../utils/tripLocationRules';
+import InfoRow from '../components/ui/InfoRow';
 import TripContactCard from '../components/TripContactCard';
-
-function calculateDistanceKm(lat1, lon1, lat2, lon2) {
-  if (!lat1 || !lon1 || !lat2 || !lon2) return 5.8;
-  const R = 6371; // km
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return parseFloat((R * c).toFixed(2));
-}
+import RideMapScreen from '../components/RideMapScreen';
+import { MapStaffStatusOverlay, MapExternalRideOverlay } from '../components/MapTripStatusOverlay';
+import PageShell from '../components/PageShell';
+import StaffActiveEmptyState from '../components/StaffActiveEmptyState';
+import { useSheetBanner } from '../context/SheetBannerContext';
+import useDriveDistanceCounter from '../hooks/useDriveDistanceCounter';
+import store from '../store';
 
 export const ActiveRideScreen = ({ onNavigateToRequest }) => {
   const dispatch = useDispatch();
@@ -53,8 +48,16 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
   const hasLoadedStaffTrips = useSelector((state) => state.trips.hasLoadedStaffTrips);
   const terminalStatuses = new Set(['COMPLETED', 'CANCELLED', 'REJECTED']);
   const gps = useSelector((state) => state.gps.currentLocation);
+  const sheetBanner = useSheetBanner();
 
   const liveTrip = activeTrip;
+
+  const externalSessionKey =
+    liveTrip?.id && (liveTrip.external_authorized || liveTrip.external_provider)
+      ? `external-${liveTrip.id}`
+      : null;
+  const externalCounter = useDriveDistanceCounter(externalSessionKey);
+  const externalResumeRef = useRef(false);
   const displayTrip =
     liveTrip && !terminalStatuses.has(String(liveTrip.status || '').toUpperCase())
       ? liveTrip
@@ -80,6 +83,32 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
     }
     return () => clearInterval(timer);
   }, [activeTrip?.status, activeTrip?.external_authorized]);
+
+  useEffect(() => {
+    externalResumeRef.current = false;
+  }, [activeTrip?.id]);
+
+  useEffect(() => {
+    const externalInTransit =
+      activeTrip?.status === 'IN_TRANSIT' &&
+      (activeTrip?.external_authorized ||
+        activeTrip?.external_provider ||
+        !activeTrip?.assigned_driver_id);
+    if (!activeTrip?.id || !externalInTransit) return;
+    if (externalCounter.isTracking || externalCounter.isEnded) return;
+    if (externalResumeRef.current) return;
+    externalResumeRef.current = true;
+    void externalCounter.startCounter(true);
+  }, [
+    activeTrip?.id,
+    activeTrip?.status,
+    activeTrip?.external_authorized,
+    activeTrip?.external_provider,
+    activeTrip?.assigned_driver_id,
+    externalCounter.isTracking,
+    externalCounter.isEnded,
+    externalCounter.startCounter,
+  ]);
 
   const handleCancelTrip = () => {
     Alert.alert(
@@ -185,8 +214,11 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
         startTime
       }));
 
+      await externalCounter.startCounter(true);
+      externalResumeRef.current = true;
+
       Alert.alert(
-        '🚕 ' + t('uberAuthorizedBadge'),
+        t('uberAuthorizedBadge'),
         t('rideStartedNotice') || 'Ride started! Departure coordinates and time logged.'
       );
     } catch (err) {
@@ -196,16 +228,17 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
     }
   };
 
-  // Staff reaches destination and presses End Ride
-  const handleEndExternalRide = () => {
-    const startLat = liveTrip.external_start_lat || liveTrip.pickup_latitude || 8.9806;
-    const startLng = liveTrip.external_start_lng || liveTrip.pickup_longitude || 38.7997;
-    const endLat = gps.latitude || liveTrip.destination_latitude || 9.0150;
-    const endLng = gps.longitude || liveTrip.destination_longitude || 38.7620;
-
-    const distance = calculateDistanceKm(startLat, startLng, endLat, endLng);
-    setComputedDistance(distance);
-    setShowFareInput(true);
+  // Staff reaches destination and presses End Ride — stop GPS counter
+  const handleEndExternalRide = async () => {
+    try {
+      await externalCounter.endCounter();
+      const session = store.getState().gps.driveSession;
+      const km = parseFloat((session.gpsTrackedKm || 0).toFixed(2));
+      setComputedDistance(km > 0 ? km : 0);
+      setShowFareInput(true);
+    } catch (err) {
+      Alert.alert('Location', err.message || 'Could not stop distance counter');
+    }
   };
 
   // Staff submits paid fare and notes
@@ -229,7 +262,9 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
         fare_amount: fare,
         currency: 'ETB',
         provider_name: liveTrip.external_provider || 'Uber / RIDE',
-        receipt_notes: receiptNotes
+        receipt_notes: receiptNotes,
+        distance_km: computedDistance,
+        gps_tracked_distance_km: computedDistance,
       });
 
       dispatch(completeExternalTrip({
@@ -239,6 +274,8 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
         currency: 'ETB',
         notes: receiptNotes
       }));
+
+      externalCounter.resetCounter();
 
       setShowFareInput(false);
       Alert.alert(
@@ -266,26 +303,19 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
     const endedTrip =
       liveTrip && terminalStatuses.has(String(liveTrip.status || '').toUpperCase()) ? liveTrip : null;
     return (
-      <View style={styles.emptyContainer}>
-        <View style={styles.emptyIconBadge}>
-          <Ionicons
-            name={endedTrip ? 'checkmark-circle-outline' : 'car-outline'}
-            size={40}
-            color={endedTrip ? colors.success : colors.textMuted}
-          />
-        </View>
-        <Text style={styles.emptyTitle}>
-          {endedTrip ? 'Trip completed' : t('noActiveRide')}
-        </Text>
-        <Text style={styles.emptyDesc}>
-          {endedTrip
-            ? `${endedTrip.request_number || endedTrip.request_code || 'Your ride'} is finished. Open the Request tab to book another movement.`
-            : t('noActiveRideDesc')}
-        </Text>
-        <TouchableOpacity style={styles.bookNowBtn} onPress={goToRequestPage} activeOpacity={0.85}>
-          <Text style={styles.bookNowBtnText}>{t('tabRequest')} — {t('requestRide')}</Text>
-        </TouchableOpacity>
-      </View>
+      <PageShell contentKey="active-empty" banner={sheetBanner}>
+        <StaffActiveEmptyState
+          variant={endedTrip ? 'completed' : 'idle'}
+          title={endedTrip ? 'Trip completed' : t('noActiveRide')}
+          description={
+            endedTrip
+              ? `${endedTrip.request_number || endedTrip.request_code || 'Your ride'} is finished. Open the Request tab to book another movement.`
+              : t('noActiveRideDesc')
+          }
+          ctaLabel={`${t('tabRequest')} — ${t('requestRide')}`}
+          onPress={goToRequestPage}
+        />
+      </PageShell>
     );
   }
 
@@ -294,6 +324,18 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
   const isExternalAuthorized = trip.status === 'EXTERNAL_AUTHORIZED';
   const isExternalInTransit = trip.status === 'IN_TRANSIT' && (trip.external_authorized || trip.external_provider || !trip.assigned_driver_id);
   const isExternalCompleted = trip.status === 'COMPLETED' && (trip.external_cost || trip.external_authorized);
+  const isExternalRide = !!(trip.external_authorized || trip.external_provider);
+
+  const mapPickupLat = isExternalInTransit
+    ? trip.external_start_lat ?? trip.pickup_latitude
+    : isExternalRide && isExternalAuthorized
+      ? null
+      : trip.pickup_latitude;
+  const mapPickupLng = isExternalInTransit
+    ? trip.external_start_lng ?? trip.pickup_longitude
+    : isExternalRide && isExternalAuthorized
+      ? null
+      : trip.pickup_longitude;
 
   const formatTimer = (sec) => {
     const mins = Math.floor(sec / 60);
@@ -302,14 +344,59 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <RideMapScreen
+      contentKey={`active-${trip.id}`}
+      mapFlex={0.54}
+      banner={sheetBanner}
+      map={
+        <>
+          <TripLiveMap
+            mode="staff"
+            fillContainer
+            showChrome={false}
+            alwaysShow={isExternalRide}
+            tripStatus={trip.status}
+            trip={trip}
+            pickupLat={mapPickupLat}
+            pickupLng={mapPickupLng}
+            destLat={trip.destination_latitude}
+            destLng={trip.destination_longitude}
+            driverLat={trip.assigned_driver_latitude}
+            driverLng={trip.assigned_driver_longitude}
+            staffLat={gps.latitude}
+            staffLng={gps.longitude}
+            speedKmh={gps.speedKmh}
+            heading={gps.heading}
+            etaMinutes={trip.eta_minutes || 8}
+            distanceKm={
+              isExternalInTransit && externalCounter.isTracking
+                ? `${externalCounter.gpsKm.toFixed(2)} km`
+                : formatDistanceDisplay(trip)
+            }
+          />
+          {isExternalRide ? (
+            <MapExternalRideOverlay
+              provider={trip.external_provider}
+              gpsKm={externalCounter.gpsKm}
+              isTracking={externalCounter.isTracking || isExternalInTransit}
+              requestLabel={trip.request_number || trip.request_code}
+            />
+          ) : !isExternalAuthorized && !isExternalInTransit && !isExternalCompleted ? (
+            <MapStaffStatusOverlay
+              status={trip.status}
+              requestLabel={trip.request_number || trip.request_code}
+            />
+          ) : null}
+        </>
+      }
+    >
+      <View style={styles.content}>
       {/* Title & Request Number Header */}
       <View style={styles.headerRow}>
         <View>
           <Text style={styles.requestNum}>{trip.request_number || trip.request_code}</Text>
           <Text style={styles.projectText}>{trip.project_name || 'Addis Ababa Urban Mobility'}</Text>
         </View>
-        <StatusBadge status={trip.status} />
       </View>
 
       {trip.status === 'PENDING' && (
@@ -327,7 +414,7 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
       {isExternalAuthorized && (
         <View style={styles.uberCard}>
           <View style={styles.uberHeader}>
-            <Text style={styles.uberIcon}>🚕</Text>
+            <Ionicons name="car" size={28} color={colors.amber} style={styles.uberIcon} />
             <View style={{ flex: 1 }}>
               <Text style={styles.uberTitle}>{t('uberAuthorizedBadge')}</Text>
               <Text style={styles.uberProvider}>{trip.external_provider || 'Uber / RIDE Transportation'}</Text>
@@ -338,7 +425,10 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
           {trip.external_driver_name ? (
             <View style={styles.dispatchedTaxiCard}>
               <View style={styles.dispatchedHeader}>
-                <Text style={styles.dispatchedTitle}>🚕 TAXI DISPATCHED BY COORDINATOR</Text>
+                <View style={styles.dispatchedTitleRow}>
+                  <Ionicons name="car-sport" size={18} color={colors.amber} />
+                  <Text style={styles.dispatchedTitle}>TAXI DISPATCHED BY COORDINATOR</Text>
+                </View>
                 <View style={styles.providerBadge}>
                   <Text style={styles.providerBadgeText}>{trip.external_provider || 'RIDE 8294'}</Text>
                 </View>
@@ -360,7 +450,12 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
                   style={styles.directCallTaxiBtn}
                   onPress={() => Linking.openURL(`tel:${trip.external_driver_phone}`)}
                 >
-                  <Text style={styles.directCallTaxiBtnText}>📞 Call Taxi Driver: {trip.external_driver_phone}</Text>
+                  <View style={styles.btnIconRow}>
+                    <Ionicons name="call" size={18} color="#000" />
+                    <Text style={styles.directCallTaxiBtnText}>
+                      Call Taxi Driver: {trip.external_driver_phone}
+                    </Text>
+                  </View>
                 </TouchableOpacity>
               ) : null}
               {trip.external_booking_ref ? (
@@ -375,10 +470,16 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
               {/* Quick Contact Buttons */}
               <View style={styles.quickHailRow}>
                 <TouchableOpacity style={styles.hailBtn} onPress={handleCallRideHotline}>
-                  <Text style={styles.hailBtnText}>📞 {t('callRide8294')}</Text>
+                  <View style={styles.btnIconRow}>
+                    <Ionicons name="call" size={16} color="#fff" />
+                    <Text style={styles.hailBtnText}>{t('callRide8294')}</Text>
+                  </View>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.hailAppBtn} onPress={handleOpenTaxiApp}>
-                  <Text style={styles.hailAppBtnText}>📱 {t('callUberRide')}</Text>
+                  <View style={styles.btnIconRow}>
+                    <Ionicons name="phone-portrait-outline" size={16} color={colors.ink} />
+                    <Text style={styles.hailAppBtnText}>{t('callUberRide')}</Text>
+                  </View>
                 </TouchableOpacity>
               </View>
             </>
@@ -387,7 +488,7 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
           {/* STEP 1: START RIDE BUTTON */}
           <View style={styles.startRideSection}>
             <Text style={styles.stepInstruction}>
-              👉 When your taxi arrives and you board, press Start Ride to record departure time and location:
+              When your taxi arrives and you board, press Start Ride to record departure time and location:
             </Text>
             <TouchableOpacity
               style={styles.startRideBtn}
@@ -397,7 +498,10 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
               {isSubmitting ? (
                 <ActivityIndicator color="#000" />
               ) : (
-                <Text style={styles.startRideBtnText}>▶ {t('startExternalRideBtn')}</Text>
+                <View style={styles.btnIconRow}>
+                  <Ionicons name="play" size={18} color="#000" />
+                  <Text style={styles.startRideBtnText}>{t('startExternalRideBtn')}</Text>
+                </View>
               )}
             </TouchableOpacity>
           </View>
@@ -409,12 +513,17 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
         <View style={styles.inTransitCard}>
           <View style={styles.inTransitHeader}>
             <View style={styles.livePulse} />
-            <Text style={styles.inTransitTitle}>🚕 {trip.external_provider || 'Uber / RIDE'} IN PROGRESS</Text>
+            <Text style={styles.inTransitTitle}>
+              {trip.external_provider || 'Uber / RIDE'} IN PROGRESS
+            </Text>
             <Text style={styles.timerText}>{formatTimer(elapsedSeconds)}</Text>
           </View>
 
           <Text style={styles.inTransitSubtitle}>
-            Trip started at {new Date(trip.external_start_time || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Real-time GPS distance calculation active.
+            Trip started at {new Date(trip.external_start_time || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.
+            {externalCounter.isTracking
+              ? ` Live distance: ${externalCounter.gpsKm.toFixed(2)} km`
+              : ' GPS distance counter active.'}
           </Text>
 
           {!showFareInput ? (
@@ -422,14 +531,15 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
               style={styles.endRideBtn}
               onPress={handleEndExternalRide}
             >
-              <Text style={styles.endRideBtnText}>⏹ {t('endExternalRideBtn')}</Text>
+              <View style={styles.btnIconRow}>
+                <Ionicons name="stop" size={18} color="#fff" />
+                <Text style={styles.endRideBtnText}>{t('endExternalRideBtn')}</Text>
+              </View>
             </TouchableOpacity>
           ) : (
             /* STEP 3: ARBITRATION / FARE INPUT */
             <View style={styles.fareInputBox}>
-              <Text style={styles.farePromptHeading}>
-                🏁 {t('enterFarePrompt')}
-              </Text>
+              <Text style={styles.farePromptHeading}>{t('enterFarePrompt')}</Text>
 
               <View style={styles.distanceBadge}>
                 <Text style={styles.distanceBadgeLabel}>{t('distanceCalculatedLabel')}:</Text>
@@ -501,35 +611,8 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
         </View>
       )}
 
-      {/* Visual Workflow Stepper (Standard internal fleet or external) */}
-      {!isExternalAuthorized && !isExternalInTransit && !isExternalCompleted && (
-        <AnimatedTripCard>
-          <View style={styles.stepperCard}>
-            <Text style={styles.sectionHeading}>{t('currentProgress')}</Text>
-            <TripPipelineStepper currentStatus={trip.status} />
-          </View>
-        </AnimatedTripCard>
-      )}
 
-      {/* Radar Map Preview */}
-      <TripLiveMap
-        mapSessionKey={trip.assignment_id || trip.id}
-        mode="staff"
-        tripStatus={trip.status}
-        height={280}
-        pickupLat={trip.pickup_latitude}
-        pickupLng={trip.pickup_longitude}
-        destLat={trip.destination_latitude}
-        destLng={trip.destination_longitude}
-        driverLat={trip.assigned_driver_latitude}
-        driverLng={trip.assigned_driver_longitude}
-        staffLat={gps.latitude}
-        staffLng={gps.longitude}
-        speedKmh={gps.speedKmh}
-        heading={gps.heading}
-        etaMinutes={trip.eta_minutes || 8}
-        distanceKm={formatDistanceDisplay(trip)}
-      />
+      {/* Internal fleet: progress stepper is on the map (MapStaffStatusOverlay). */}
 
       {/* Internal Fleet Driver Card */}
       {trip.assigned_driver_name && !isExternalAuthorized && (
@@ -567,63 +650,25 @@ export const ActiveRideScreen = ({ onNavigateToRequest }) => {
           {/* Cancel Request Button for Staff */}
           {trip.status === 'ASSIGNED' && (
             <TouchableOpacity style={styles.cancelRequestBtn} onPress={handleCancelTrip}>
-              <Text style={styles.cancelRequestBtnText}>✕ Cancel Movement Request</Text>
+              <View style={styles.btnIconRow}>
+                <Ionicons name="close-circle-outline" size={18} color={colors.danger} />
+                <Text style={styles.cancelRequestBtnText}>Cancel Movement Request</Text>
+              </View>
             </TouchableOpacity>
           )}
         </View>
       )}
 
-      {trip.assigned_driver_name && !trip.external_authorized && !trip.staff_meter_started
-        && ['IN_TRANSIT', 'ARRIVED'].includes(trip.status) && (
-        <View style={styles.fleetMeterCard}>
-          <Text style={styles.fleetMeterTitle}>Start your ride</Text>
-          <Text style={styles.fleetMeterHint}>
-            When you board, tap start. End at destination to record distance for coordinators.
-          </Text>
-          <TouchableOpacity
-            style={styles.startRideBtn}
-            onPress={handleStartFleetMeter}
-            disabled={isSubmitting}
-          >
-            <Text style={styles.startRideBtnText}>▶ Start distance counter</Text>
-          </TouchableOpacity>
+      {getCoordinationMessage(trip, 'staff') ? (
+        <View style={styles.coordBanner}>
+          <Text style={styles.coordBannerText}>{getCoordinationMessage(trip, 'staff')}</Text>
         </View>
-      )}
+      ) : null}
 
-      {trip.staff_meter_started && !trip.staff_meter_ended && trip.status === 'IN_TRANSIT' && (
-        <View style={styles.fleetMeterCard}>
-          <Text style={styles.fleetMeterTitle}>Trip in progress</Text>
-          <TouchableOpacity
-            style={styles.endRideBtn}
-            onPress={handleEndFleetMeter}
-            disabled={isSubmitting}
-          >
-            <Text style={styles.endRideBtnText}>⏹ End trip & record distance</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Origin & Destination Card */}
-      <View style={styles.routeCard}>
-        <View style={styles.routeRow}>
-          <View style={styles.pointGreenDot} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.routeLabel}>PICKUP</Text>
-            <Text style={styles.routeValue}>{trip.pickup_location}</Text>
-          </View>
-        </View>
-
-        <View style={styles.routeDivider} />
-
-        <View style={styles.routeRow}>
-          <View style={styles.pointRedDot} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.routeLabel}>DESTINATION</Text>
-            <Text style={styles.routeValue}>{trip.destination_location}</Text>
-          </View>
-        </View>
+      <InfoRow dot="pickup" caption="Pickup" value={trip.pickup_location} />
+      <InfoRow dot="destination" caption="Destination" value={trip.destination_location} />
       </View>
-    </ScrollView>
+    </RideMapScreen>
   );
 };
 
@@ -633,29 +678,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgPrimary,
   },
   content: {
-    padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 8,
   },
-  emptyContainer: {
-    flex: 1,
-    backgroundColor: colors.bgPrimary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  emptyIconBadge: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+  coordBanner: {
     backgroundColor: colors.bgSecondary,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: colors.borderSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
   },
-  emptyIconText: {
-    fontSize: 28,
+  coordBannerText: {
+    color: colors.mute,
+    fontSize: 12,
+    lineHeight: 17,
   },
   fleetMeterCard: {
     backgroundColor: colors.bgSecondary,
@@ -675,31 +711,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textMuted,
     marginBottom: 12,
-  },
-  emptyTitle: {
-    color: colors.textPrimary,
-    fontSize: 18,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  emptyDesc: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    textAlign: 'center',
-    lineHeight: 18,
-    marginBottom: 20,
-  },
-  bookNowBtn: {
-    backgroundColor: colors.amber,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  bookNowBtnText: {
-    color: '#000',
-    fontSize: 14,
-    fontWeight: '800',
   },
   headerRow: {
     flexDirection: 'row',
@@ -733,7 +744,19 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   uberIcon: {
-    fontSize: 32,
+    marginRight: 0,
+  },
+  btnIconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  dispatchedTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
   },
   uberTitle: {
     color: colors.amber,
@@ -1138,15 +1161,12 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   comingCard: {
-    backgroundColor: colors.bgSecondary,
-    borderRadius: 16,
+    backgroundColor: colors.card,
+    borderRadius: 18,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(59, 130, 246, 0.4)',
+    borderColor: colors.line,
     marginBottom: 16,
-    shadowColor: '#3b82f6',
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: 4 },
   },
   comingBanner: {
     flexDirection: 'row',

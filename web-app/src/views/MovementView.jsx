@@ -47,6 +47,10 @@ import {
   isExternalRideRequest
 } from '../utils/rideHelpers.js';
 import { PROJECT_REQUEST_UPSERT } from '../utils/mergeRequests.js';
+import {
+  getMovementCenterCoordinationNote,
+  isPickupManual,
+} from '../utils/tripLocationRules.js';
 
 export default function MovementView() {
   const { section: activeTab } = usePortalNav();
@@ -133,16 +137,18 @@ export default function MovementView() {
       dispatch(fetchRequests());
     }
     dispatch(fetchLiveFleet());
-    if (!vehicles?.length) dispatch(fetchVehicles());
-    if (!drivers?.length) dispatch(fetchDrivers());
+    dispatch(fetchVehicles());
+    dispatch(fetchDrivers());
     dispatch(fetchAccidents());
 
     const interval = setInterval(() => {
       dispatch(fetchLiveFleet());
+      dispatch(fetchVehicles());
+      dispatch(fetchDrivers());
       dispatch(fetchAccidents());
     }, 60000);
     return () => clearInterval(interval);
-  }, [dispatch, activeTab, requests.length, vehicles.length, drivers.length]);
+  }, [dispatch, activeTab, requests.length]);
 
   const handleSelectRequest = (req) => {
     dispatch(selectRequest(req));
@@ -152,6 +158,8 @@ export default function MovementView() {
   };
 
   const openAssignModal = (prefill) => {
+    dispatch(fetchVehicles());
+    dispatch(fetchDrivers());
     setAssignForm({
       vehicle_id: prefill?.vehicle?.id || '',
       driver_id: prefill?.driver?.id || '',
@@ -311,7 +319,7 @@ export default function MovementView() {
           title="Live map"
           subtitle="Vehicle and driver positions for your project. Refreshes every 15 seconds."
         />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl">
+        <div className="portal-stat-strip max-w-3xl">
           <AdminStatCard icon={Car} label="Vehicles on map" value={liveFleet.length} tone="blue" />
           <AdminStatCard icon={User} label="Drivers on map" value={liveDrivers.length} tone="purple" />
           <AdminStatCard
@@ -322,24 +330,20 @@ export default function MovementView() {
             hint="Stale if no update &gt; 5 min"
           />
         </div>
-        <div className="glass-panel p-4 rounded-2xl flex flex-wrap items-center justify-between gap-2 border border-slate-200">
-          <div className="flex items-center gap-2 text-xs text-slate-700">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 live-pulse inline-block" />
-            <span className="font-semibold">Live fleet &amp; driver GPS</span>
-            <span className="text-slate-500 hidden sm:inline">
-              | Purple = driver, green/blue = vehicle
-            </span>
-          </div>
+        <div className="map-legend-line">
+          <span className="w-2 h-2 rounded-full bg-live live-pulse inline-block" />
+          <span className="font-semibold text-ink">Live fleet &amp; driver GPS</span>
+          <span className="text-mute hidden sm:inline">| Purple = driver, green/blue = vehicle</span>
           <button
             type="button"
             onClick={() => dispatch(fetchLiveFleet())}
-            className="text-xs font-semibold text-brand-600 hover:text-brand-700"
+            className="portal-link ml-auto"
           >
             Refresh now
           </button>
         </div>
         {fleetLoading && liveFleet.length === 0 && liveDrivers.length === 0 ? (
-          <div className="glass-panel rounded-2xl border border-slate-200 p-8 text-center text-sm text-slate-500">
+          <div className="rounded-2xl p-8 text-center text-sm text-mute min-h-[200px] flex items-center justify-center">
             Loading map positions…
           </div>
         ) : (
@@ -365,8 +369,8 @@ export default function MovementView() {
     <div className="portal-page">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="p-3 bg-emerald-500/20 border border-emerald-500/40 rounded-xl text-xs text-emerald-800 flex items-center gap-2 shadow-lg animate-bounce">
-          <CheckCircle className="w-4 h-4 text-emerald-600" /> {toastMessage}
+        <div className="portal-toast flex items-center gap-2">
+          <CheckCircle className="w-4 h-4 shrink-0" /> {toastMessage}
         </div>
       )}
 
@@ -376,7 +380,7 @@ export default function MovementView() {
         subtitle="Assign cars and drivers to trips (no vehicle or driver registration here — Logistics Coordinator manages fleet)."
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="portal-stat-strip">
         <AdminStatCard icon={Clock} label="All requests" value={requests.length} tone="brand" active={statusFilter === 'ALL'} onClick={() => setStatusFilter('ALL')} />
         <AdminStatCard icon={Clock} label="Pending" value={requests.filter((r) => r.status === 'PENDING').length} tone="amber" active={statusFilter === 'PENDING'} onClick={() => setStatusFilter('PENDING')} />
         <AdminStatCard icon={Car} label="Assigned" value={requests.filter((r) => r.status === 'ASSIGNED').length} tone="blue" active={statusFilter === 'ASSIGNED'} onClick={() => setStatusFilter('ASSIGNED')} />
@@ -385,15 +389,13 @@ export default function MovementView() {
         <AdminStatCard icon={CheckCircle} label="Completed" value={requests.filter((r) => r.status === 'COMPLETED').length} tone="emerald" active={statusFilter === 'COMPLETED'} onClick={() => setStatusFilter('COMPLETED')} />
       </div>
 
-      {/* Main Grid: Inbox on Left, Map & Recommendations on Right */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Movement Requests Inbox (5 cols) */}
-        <div className="lg:col-span-5 space-y-3">
-          <div className="flex items-center justify-between text-xs text-slate-400 px-1">
-            <span className="font-bold text-slate-800 flex items-center gap-1.5">
+      <div className="portal-dispatch-split">
+        <div className="portal-dispatch-inbox-col space-y-3 max-lg:border-r-0 max-lg:pr-0 max-lg:mb-6">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-base font-bold text-ink flex items-center gap-1.5">
               <Clock className="w-4 h-4 text-brand-600" /> Requests Inbox
             </span>
-            <span>{filteredRequests.length} requests</span>
+            <span className="text-[13px] text-mute">{filteredRequests.length} requests</span>
           </div>
 
           <div className="space-y-2.5 portal-dispatch-inbox overflow-y-auto pr-1">
@@ -406,7 +408,7 @@ export default function MovementView() {
                 </div>
               ))
             ) : filteredRequests.length === 0 ? (
-              <div className="glass-panel p-8 rounded-2xl text-center text-xs text-slate-500">
+              <div className="glass-panel p-8 rounded-2xl text-center text-sm text-mute">
                 No requests matching filter "{statusFilter}".
               </div>
             ) : (
@@ -415,71 +417,58 @@ export default function MovementView() {
                 const isPersonal = req.trip_category === 'PERSONAL';
 
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={req.id}
                     onClick={() => handleSelectRequest(req)}
-                    className={`glass-panel p-4 rounded-2xl border transition-all cursor-pointer relative ${
-                      isSelected
-                        ? 'border-brand-500 bg-brand-500/10 shadow-lg shadow-brand-500/10'
-                        : 'border-slate-200 hover:border-slate-300'
+                    className={`dispatch-inbox-row block ${
+                      isSelected ? 'dispatch-inbox-row-selected' : ''
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-slate-900">
-                            {req.staff?.full_name || 'Staff Member'}
-                          </span>
-                          {/* Trip Category Badge */}
-                          {isPersonal ? (
-                            <span className="px-1.5 py-0.2 rounded text-[10px] font-extrabold bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                              👤 Personal (Fuel Billed)
-                            </span>
-                          ) : (
-                            <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                              🏢 Official
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-slate-400 font-mono">
-                          {req.pickup_address} → {req.destination_address}
-                        </p>
-                      </div>
-
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase shrink-0 ${
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <span className="text-sm font-bold text-ink text-left">
+                        {req.staff?.full_name || 'Staff Member'}
+                      </span>
+                      <span className={`status-dot shrink-0 ${
                         req.status === 'PENDING'
-                          ? 'bg-amber-500/20 text-amber-800 border border-amber-200'
-                          : req.status === 'ASSIGNED'
-                          ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                          ? 'status-live-text'
                           : isExternalRideRequest(req)
-                          ? 'bg-indigo-500/20 text-indigo-800 border border-indigo-500/30'
-                          : req.status === 'IN_TRANSIT'
-                          ? 'bg-emerald-500/20 text-emerald-800 border border-emerald-500/30'
-                          : 'bg-slate-100 text-slate-400'
+                          ? 'status-ext'
+                          : req.status === 'ASSIGNED' || req.status === 'IN_TRANSIT'
+                          ? 'text-brand-600'
+                          : 'text-mute'
                       }`}>
                         {isExternalRideRequest(req) ? externalRideStatusLabel(req) : req.status}
                       </span>
                     </div>
-
-                    <div className="mt-3 pt-2.5 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-400">
-                      <span className="flex items-center gap-1 font-mono">
-                        <Clock className="w-3 h-3 text-slate-500" />
-                        {new Date(req.scheduled_pickup_time || req.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    <p className="text-[13px] text-mute truncate text-left mb-2">
+                      {req.pickup_address} → {req.destination_address}
+                    </p>
+                    <div className="flex items-center justify-between text-xs text-mute gap-2">
+                      <span className="flex items-center gap-2 min-w-0 truncate">
+                        {isPersonal ? (
+                          <span className="font-bold text-ext shrink-0">👤 Personal (Fuel Billed)</span>
+                        ) : (
+                          <span className="font-semibold shrink-0">🏢 Official</span>
+                        )}
+                        <span className="flex items-center gap-1 shrink-0">
+                          <Clock className="w-3 h-3" />
+                          {new Date(req.scheduled_pickup_time || req.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        <span className="shrink-0">{req.passengers_count} passenger(s)</span>
                       </span>
-                      <span>{req.passengers_count} passenger(s)</span>
-                      <span className="text-brand-600 font-medium flex items-center gap-0.5">
+                      <span className="text-brand-600 font-bold flex items-center gap-0.5 shrink-0">
                         Inspect <ChevronRight className="w-3 h-3" />
                       </span>
                     </div>
-                  </div>
+                  </button>
                 );
               })
             )}
           </div>
         </div>
 
-        {/* Right Column: Selected Request Inspector & Dispatch Controls (7 cols) */}
-        <div className="lg:col-span-7 space-y-4">
+        <div className="portal-dispatch-inspector-col space-y-6 max-lg:pl-0 max-lg:pt-5">
           {selectedRequest ? (
             <div className="space-y-4">
               {/* Request Summary Card */}
@@ -542,6 +531,32 @@ export default function MovementView() {
                     <strong className="text-slate-800 font-mono">{selectedRequest.destination_address}</strong>
                   </div>
                 </div>
+
+                {getMovementCenterCoordinationNote(selectedRequest) ? (
+                  <div className="p-3 rounded-xl bg-sky-50 border border-sky-200 text-xs text-sky-900">
+                    {getMovementCenterCoordinationNote(selectedRequest)}
+                  </div>
+                ) : null}
+
+                {isPickupManual(selectedRequest) && selectedRequest.staff ? (
+                  <div className="p-3 rounded-xl bg-white border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1">
+                        <User className="w-3 h-3" /> Staff — confirm start location
+                      </span>
+                      <strong className="text-slate-900 text-sm block">{selectedRequest.staff.full_name}</strong>
+                      <span className="text-slate-500 text-xs">{selectedRequest.pickup_address}</span>
+                    </div>
+                    {selectedRequest.staff.phone_number ? (
+                      <a
+                        href={`tel:${selectedRequest.staff.phone_number}`}
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold"
+                      >
+                        <Phone className="w-4 h-4" /> Call staff
+                      </a>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
 
               {/* Status Notice: Authorized for Uber/RIDE */}
@@ -785,12 +800,9 @@ export default function MovementView() {
               )}
             </div>
           ) : (
-            <div className="glass-panel p-12 rounded-2xl border border-slate-200 text-center space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
-                <Compass className="w-6 h-6" />
-              </div>
-              <h3 className="text-sm font-bold text-slate-900">Select a Movement Request</h3>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+            <div className="glass-panel p-12 rounded-2xl text-center space-y-3 py-[70px]">
+              <h3 className="text-[17px] font-bold text-ink">Select a Movement Request</h3>
+              <p className="text-sm text-mute max-w-[380px] mx-auto font-medium">
                 Select any incoming request from the inbox to inspect pickup and destination on the map and view auto-ranked vehicle recommendations.
               </p>
             </div>

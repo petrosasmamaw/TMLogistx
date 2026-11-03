@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import BrandMark from '../components/BrandMark.jsx';
 import LoadingButton from '../components/ui/LoadingButton.jsx';
-import { fieldInput, fieldLabel } from '../components/ui/formClasses.js';
+import { fieldInput, fieldLabel, btnPrimary, alertError, alertSuccess } from '../components/ui/formClasses.js';
 import { apiRequest } from '../api/client.js';
 
 export default function ForgotPasswordPage({ onBack }) {
@@ -29,23 +29,23 @@ export default function ForgotPasswordPage({ onBack }) {
   };
 
   return (
-    <div className="login-shell min-h-[100dvh] bg-gradient-to-b from-brand-50 via-slate-50 to-slate-100 flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-md">
+    <div className="login-shell min-h-[100dvh] flex flex-col items-center justify-center p-6">
+      <div className="w-full max-w-[420px]">
         <div className="flex flex-col items-center mb-6">
           <BrandMark size="lg" className="mb-3" />
-          <h1 className="text-xl font-bold text-slate-900">Forgot password</h1>
+          <h1 className="text-2xl font-extrabold text-ink tracking-[-0.5px]">Forgot password</h1>
         </div>
-        <form onSubmit={handleSubmit} className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4">
-          {error && <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
-          {message && <div className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">{message}</div>}
+        <form onSubmit={handleSubmit} className="login-auth-sheet space-y-4">
+          {error && <div className={alertError}>{error}</div>}
+          {message && <div className={alertSuccess}>{message}</div>}
           <div>
             <label className={fieldLabel}>Email</label>
             <input type="email" required className={fieldInput} value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
-          <LoadingButton type="submit" loading={loading} loadingLabel="Sending…" className="w-full bg-brand-600 text-white font-semibold rounded-xl py-3">
+          <LoadingButton type="submit" loading={loading} loadingLabel="Sending…" className={`w-full ${btnPrimary} min-h-[48px]`}>
             Send reset link
           </LoadingButton>
-          <button type="button" onClick={onBack} className="w-full text-sm text-brand-600 font-semibold py-2">
+          <button type="button" onClick={onBack} className="w-full text-[13px] font-bold text-brand-600 py-2 min-h-[44px]">
             Back to sign in
           </button>
         </form>

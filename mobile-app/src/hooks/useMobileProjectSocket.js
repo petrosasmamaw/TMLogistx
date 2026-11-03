@@ -9,6 +9,7 @@ import {
   bumpDriverStats
 } from '../store/tripSlice';
 import { notifyOnce } from '../services/localNotifications';
+import { resolveSocketBaseUrl } from '../utils/resolveApiBaseUrl.js';
 
 function payloadRequestId(payload) {
   return (
@@ -33,13 +34,55 @@ function payloadDriverUserId(payload) {
   return payload?.assignment?.driver?.user_id || null;
 }
 
+function userInNotifyList(payload, userId) {
+  if (!userId) return false;
+  const ids = payload?.notifyUserIds;
+  if (!Array.isArray(ids) || !ids.length) return false;
+  return ids.some((id) => String(id) === String(userId));
+}
+
+function isStaffTripRecipient(payload, userId) {
+  if (!userId) return false;
+  if (userInNotifyList(payload, userId)) return true;
+  const staffId = payloadStaffId(payload);
+  return staffId && String(staffId) === String(userId);
+}
+
+function isDriverTripRecipient(payload, userId) {
+  if (!userId) return false;
+  if (userInNotifyList(payload, userId)) return true;
+  const driverUserId = payloadDriverUserId(payload);
+  return driverUserId && String(driverUserId) === String(userId);
+}
+
+function staffStatusNotification(status, requestId) {
+  const s = String(status || '').toUpperCase();
+  if (s === 'ARRIVED') {
+    return {
+      key: `arrived-${requestId}`,
+      title: 'Driver arrived at pickup',
+      body: 'Your driver has arrived at the pickup location.',
+    };
+  }
+  if (s === 'IN_TRANSIT' || s === 'PASSENGER_PICKED_UP') {
+    return {
+      key: `started-${requestId}`,
+      title: 'Trip started',
+      body: 'Your driver has started the trip toward your destination.',
+    };
+  }
+  if (s === 'COMPLETED') {
+    return {
+      key: `completed-${requestId}`,
+      title: 'Trip completed',
+      body: 'Your movement has been marked complete.',
+    };
+  }
+  return null;
+}
+
 function resolveSocketUrl() {
-  const fromSocket = (process.env.EXPO_PUBLIC_SOCKET_URL || '').replace(/\/$/, '');
-  const api = (process.env.EXPO_PUBLIC_API_BASE_URL || '').replace(/\/$/, '');
-  const fromApi = api ? api.replace(/\/api\/?$/i, '') : '';
-  if (fromSocket) return fromSocket;
-  if (fromApi) return fromApi;
-  return '';
+  return resolveSocketBaseUrl();
 }
 
 function resolveProjectId(user) {
@@ -175,20 +218,18 @@ export default function useMobileProjectSocket() {
       const requestId = payloadRequestId(payload);
       const code = payload?.requestCode || payload?.request?.request_code;
       if (r === 'DRIVER') {
-        const driverUserId = payloadDriverUserId(payload);
-        if (driverUserId && driverUserId !== me) return;
+        if (!isDriverTripRecipient(payload, me)) return;
         const assignmentId = payload?.assignment?.id || payload?.assignmentId;
-        notifyOnce(
+        void notifyOnce(
           `assign-${assignmentId || requestId}`,
           'New trip assignment',
           `You have been assigned${code ? ` (${code})` : ''}. Open Trips to accept.`
         );
       } else if (r === 'STAFF') {
-        const staffId = payloadStaffId(payload);
-        if (!staffId || staffId !== me) return;
+        if (!isStaffTripRecipient(payload, me)) return;
         const plate = payload?.vehiclePlate || payload?.assignment?.vehicle?.plate_number;
         const name = payload?.driverName || payload?.assignment?.driver?.full_name;
-        notifyOnce(
+        void notifyOnce(
           `staff-assigned-${requestId}`,
           'Driver assigned',
           name
@@ -208,17 +249,11 @@ export default function useMobileProjectSocket() {
         dispatch(bumpDriverStats());
       }
       if (r !== 'STAFF') return;
-      const staffId = payloadStaffId(payload);
-      if (!staffId || staffId !== userIdRef.current) return;
+      if (!isStaffTripRecipient(payload, userIdRef.current)) return;
       const requestId = payloadRequestId(payload);
-      if (status === 'ARRIVED') {
-        notifyOnce(
-          `arrived-${requestId}`,
-          'Driver arrived at pickup',
-          'Your driver has arrived at the pickup location.'
-        );
-      } else if (status === 'COMPLETED') {
-        notifyOnce(`completed-${requestId}`, 'Trip completed', 'Your movement has been marked complete.');
+      const alert = staffStatusNotification(status, requestId);
+      if (alert) {
+        void notifyOnce(alert.key, alert.title, alert.body);
       }
     });
 

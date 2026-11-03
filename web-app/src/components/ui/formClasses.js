@@ -1,10 +1,14 @@
-/** Shared mobile-first form control classes (48px touch targets on phone). */
-export const fieldLabel = 'block text-xs font-semibold text-slate-600 mb-1.5';
+/** Shared form control classes — Calm Control Room tokens */
+export const fieldLabel = 'block text-[13px] font-bold text-ink mb-[5px] mt-3 first:mt-0';
 export const fieldInput =
-  'field-control w-full rounded-xl border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 disabled:bg-slate-50 disabled:text-slate-500';
+  'field-control w-full min-h-[46px] rounded-xl border-[1.5px] border-line bg-white text-ink text-sm font-medium placeholder:text-mute focus:outline-none focus:border-brand-600 focus:ring-[3px] focus:ring-brand-600/15 disabled:bg-page disabled:text-mute px-3';
 export const fieldSelect = fieldInput;
-export const fieldTextarea = `${fieldInput} min-h-[100px] py-3 resize-y`;
+export const fieldTextarea = `${fieldInput} min-h-[80px] py-3 resize-y`;
 export const btnPrimary =
-  'inline-flex items-center justify-center gap-2 min-h-[48px] px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors disabled:opacity-50';
+  'inline-flex items-center justify-center gap-2 min-h-[44px] px-[18px] rounded-xl bg-brand-600 hover:brightness-[1.06] active:scale-[0.98] text-white text-sm font-bold transition-all duration-120 disabled:opacity-45 disabled:pointer-events-none';
 export const btnSecondary =
-  'inline-flex items-center justify-center gap-2 min-h-[48px] px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50';
+  'inline-flex items-center justify-center gap-2 min-h-[44px] px-[18px] rounded-xl border-[1.5px] border-line bg-transparent text-ink text-sm font-bold hover:border-brand-600 hover:text-brand-600 transition-colors duration-150 disabled:opacity-45';
+export const btnLive =
+  'inline-flex items-center justify-center gap-2 min-h-[44px] px-[18px] rounded-xl bg-live text-[#3b2600] text-sm font-bold hover:brightness-[1.06] active:scale-[0.98] transition-all duration-120';
+export const alertError = 'text-sm font-semibold text-danger border-l-[3px] border-danger pl-3 py-1';
+export const alertSuccess = 'text-sm font-semibold text-brand-700 border-l-[3px] border-brand-600 pl-3 py-1';

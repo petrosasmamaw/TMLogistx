@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useImperativeHandle, forwardRef, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,154 +9,87 @@ import {
   Alert,
   Platform
 } from 'react-native';
-import { useDispatch, useSelector } from 'react-redux';
-import {
-  startDriveTracking,
-  appendDriveRoutePoint,
-  endDriveTracking,
-  updateLocation
-} from '../store/gpsSlice';
-import { estimateMapRouteKm } from '../utils/distance';
+import useDriveDistanceCounter from '../hooks/useDriveDistanceCounter';
+import { buildDistanceCompletionPayload } from '../utils/tripDistancePayload';
+import { requiresRouteDistanceCounter } from '../utils/tripLocationRules';
+import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { useTranslation } from '../i18n';
+import store from '../store';
 
-/**
- * Resolves distance payload for trip completion (GPS path, map estimate, or manual).
- */
-export function buildDistanceCompletionPayload(driveSession, manualMode, manualKmText, trip) {
-  const manualVal = parseFloat(String(manualKmText).replace(',', '.'));
-  const gpsKm = driveSession.gpsTrackedKm || 0;
-  const mapFromSession = driveSession.mapEstimatedKm;
-  const pickupLat = trip?.pickup_latitude ?? trip?.pickup_lat;
-  const pickupLng = trip?.pickup_longitude ?? trip?.pickup_lng;
-  const destLat = trip?.destination_latitude ?? trip?.destination_lat;
-  const destLng = trip?.destination_longitude ?? trip?.destination_lng;
-  const mapFromTrip =
-    pickupLat != null && destLat != null
-      ? estimateMapRouteKm(pickupLat, pickupLng, destLat, destLng)
-      : null;
-  const mapKm = mapFromSession ?? mapFromTrip ?? gpsKm;
+export { buildDistanceCompletionPayload } from '../utils/tripDistancePayload';
 
-  if (manualMode && !Number.isNaN(manualVal) && manualVal > 0) {
-    return {
-      distance_source: 'MANUAL',
-      manual_distance_km: manualVal,
-      gps_tracked_distance_km: gpsKm,
-      map_estimated_distance_km: mapKm,
-      actual_distance_km: manualVal,
-      drive_start_lat: driveSession.startLat,
-      drive_start_lng: driveSession.startLng,
-      drive_end_lat: driveSession.endLat,
-      drive_end_lng: driveSession.endLng
-    };
-  }
-
-  const useGps = driveSession.isEnded && gpsKm > 0.1;
-  const finalKm = useGps ? gpsKm : mapKm;
-  return {
-    distance_source: useGps ? 'GPS_TRACKED' : 'MAP_ESTIMATE',
-    gps_tracked_distance_km: gpsKm,
-    map_estimated_distance_km: mapKm,
-    manual_distance_km: null,
-    actual_distance_km: finalKm,
-    drive_start_lat: driveSession.startLat,
-    drive_start_lng: driveSession.startLng,
-    drive_end_lat: driveSession.endLat,
-    drive_end_lng: driveSession.endLng
-  };
-}
-
-export default function DriverTripDistancePanel({ trip, onDistanceReady }) {
+const DriverTripDistancePanel = forwardRef(function DriverTripDistancePanel(
+  { trip, onDistanceReady, autoStart = true },
+  ref
+) {
   const { t } = useTranslation();
-  const dispatch = useDispatch();
-  const gps = useSelector((state) => state.gps.currentLocation);
-  const driveSession = useSelector((state) => state.gps.driveSession);
-
   const [manualMode, setManualMode] = useState(false);
   const [manualKm, setManualKm] = useState('');
-  const locationWatchRef = useRef(null);
+
+  const showCounter = requiresRouteDistanceCounter(trip);
+  const counter = useDriveDistanceCounter(showCounter ? trip?.id : null);
+  const { driveSession, startCounter, endCounter, resetCounter } = counter;
+  const autoStartedRef = useRef(false);
+
+  useImperativeHandle(ref, () => ({
+    endCounter,
+    resetCounter,
+    stopWatch: counter.stopWatch,
+  }));
+
+  useEffect(() => {
+    autoStartedRef.current = false;
+  }, [trip?.id]);
+
+  useEffect(() => {
+    if (!showCounter || !autoStart || !trip) return undefined;
+    const st = String(trip.status || '').toUpperCase();
+    if (st !== 'IN_TRANSIT' && st !== 'PASSENGER_PICKED_UP') return undefined;
+    if (driveSession.isTracking || driveSession.isEnded || autoStartedRef.current) return undefined;
+    autoStartedRef.current = true;
+    void startCounter(true);
+    return undefined;
+  }, [
+    trip?.status,
+    trip?.id,
+    showCounter,
+    autoStart,
+    driveSession.isTracking,
+    driveSession.isEnded,
+    startCounter,
+  ]);
 
   useEffect(() => {
     const payload = buildDistanceCompletionPayload(driveSession, manualMode, manualKm, trip);
     onDistanceReady?.(payload);
   }, [driveSession, manualMode, manualKm, trip, onDistanceReady]);
 
-  useEffect(() => {
-    return () => {
-      if (locationWatchRef.current?.remove) {
-        locationWatchRef.current.remove();
-      }
-    };
-  }, []);
-
-  const readCurrentCoords = async () => {
+  const handleStartDrive = async (silent = false) => {
     try {
-      const Location = await import('expo-location');
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        const pos = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced
-        });
-        return {
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-          accuracy: pos.coords.accuracy
-        };
+      await startCounter(true);
+      if (!silent) {
+        Alert.alert(t('driveDistanceStartedTitle'), t('driveDistanceStartedMsg'));
       }
-    } catch {
-      // expo-location optional / unavailable
-    }
-    return {
-      latitude: gps.latitude,
-      longitude: gps.longitude,
-      accuracy: gps.accuracy
-    };
-  };
-
-  const startWatching = async () => {
-    try {
-      const Location = await import('expo-location');
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
-
-      locationWatchRef.current = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.Balanced,
-          distanceInterval: 25,
-          timeInterval: 5000
-        },
-        (pos) => {
-          const { latitude, longitude, accuracy } = pos.coords;
-          dispatch(updateLocation({ latitude, longitude, accuracy }));
-          dispatch(appendDriveRoutePoint({ latitude, longitude }));
-        }
-      );
-    } catch {
-      // Redux GPS / simulated updates only
+    } catch (err) {
+      Alert.alert('Location', err.message || 'Could not start distance counter');
     }
   };
 
-  const handleStartDrive = async () => {
-    const coords = await readCurrentCoords();
-    dispatch(startDriveTracking(coords));
-    dispatch(updateLocation(coords));
-    await startWatching();
-    Alert.alert(t('driveDistanceStartedTitle'), t('driveDistanceStartedMsg'));
+  const handleEndDrive = async (silent = false) => {
+    await endCounter();
+    const session = store.getState().gps.driveSession;
+    if (!manualMode && session.gpsTrackedKm < 0.2) {
+      setManualKm(String(session.mapEstimatedKm || trip?.distance_km || ''));
+    }
+    if (!silent) {
+      Alert.alert(t('driveDistanceEndedTitle'), t('driveDistanceEndedMsg'));
+    }
   };
 
-  const handleEndDrive = async () => {
-    if (locationWatchRef.current?.remove) {
-      locationWatchRef.current.remove();
-      locationWatchRef.current = null;
-    }
-    const coords = await readCurrentCoords();
-    dispatch(endDriveTracking(coords));
-    dispatch(updateLocation(coords));
-    if (!manualMode && driveSession.gpsTrackedKm < 0.2) {
-      setManualKm(String(driveSession.mapEstimatedKm || trip?.distance_km || ''));
-    }
-    Alert.alert(t('driveDistanceEndedTitle'), t('driveDistanceEndedMsg'));
-  };
+  if (!showCounter) {
+    return null;
+  }
 
   const displayGps = driveSession.gpsTrackedKm?.toFixed(2) ?? '0.00';
   const displayMap =
@@ -183,22 +116,31 @@ export default function DriverTripDistancePanel({ trip, onDistanceReady }) {
       <View style={styles.btnRow}>
         <TouchableOpacity
           style={[styles.btn, driveSession.isTracking && styles.btnActive]}
-          onPress={handleStartDrive}
+          onPress={() => handleStartDrive(false)}
           disabled={driveSession.isTracking}
         >
-          <Text style={styles.btnText}>▶ {t('driveDistanceStart')}</Text>
+          <View style={styles.btnIconRow}>
+            <Ionicons name="play" size={16} color={colors.ink} />
+            <Text style={styles.btnText}>{t('driveDistanceStart')}</Text>
+          </View>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.btn, styles.btnEnd, !driveSession.isTracking && styles.btnDisabled]}
-          onPress={handleEndDrive}
+          onPress={() => handleEndDrive(false)}
           disabled={!driveSession.isTracking}
         >
-          <Text style={styles.btnText}>■ {t('driveDistanceEnd')}</Text>
+          <View style={styles.btnIconRow}>
+            <Ionicons name="stop" size={16} color={colors.ink} />
+            <Text style={styles.btnText}>{t('driveDistanceEnd')}</Text>
+          </View>
         </TouchableOpacity>
       </View>
 
       {driveSession.isTracking && (
-        <Text style={styles.liveHint}>{t('driveDistanceTrackingLive')}</Text>
+        <View style={styles.liveCounter}>
+          <Text style={styles.liveCounterLabel}>Live trip distance</Text>
+          <Text style={styles.liveCounterValue}>{displayGps} km</Text>
+        </View>
       )}
 
       <View style={styles.manualRow}>
@@ -226,7 +168,9 @@ export default function DriverTripDistancePanel({ trip, onDistanceReady }) {
       )}
     </View>
   );
-}
+});
+
+export default DriverTripDistancePanel;
 
 const styles = StyleSheet.create({
   card: {
@@ -297,16 +241,38 @@ const styles = StyleSheet.create({
     opacity: 0.45
   },
   btnText: {
-    color: colors.textPrimary,
-    fontSize: 12,
-    fontWeight: '800'
-  },
-  liveHint: {
-    color: colors.success,
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
-    marginTop: 8,
-    textAlign: 'center'
+    color: colors.ink,
+  },
+  btnIconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  liveCounter: {
+    marginTop: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: colors.amberMuted,
+    borderWidth: 1,
+    borderColor: colors.amber,
+    alignItems: 'center',
+  },
+  liveCounterLabel: {
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  liveCounterValue: {
+    color: colors.textPrimary,
+    fontSize: 28,
+    fontWeight: '900',
+    marginTop: 4,
   },
   manualRow: {
     flexDirection: 'row',

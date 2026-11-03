@@ -1,3 +1,9 @@
+import {
+  shouldShowLiveNavToDest,
+  shouldShowLiveNavToPickup,
+  getCoordinationMessage,
+} from './tripLocationRules';
+
 /** Trip leg: driver heading to pickup (start) vs heading to destination (end). */
 export function isHeadingToDestination(status) {
   return ['IN_TRANSIT', 'PASSENGER_PICKED_UP'].includes(String(status || '').toUpperCase());
@@ -15,9 +21,12 @@ export function isTripNavigationEnded(status) {
 /**
  * In-app map navigation copy and behavior (no external maps).
  */
-export function getInAppNavigationMeta(status, mode = 'driver') {
+export function getInAppNavigationMeta(status, mode = 'driver', trip = null) {
   const s = String(status || '').toUpperCase();
   const isStaff = mode === 'staff';
+  const coordHint = trip ? getCoordinationMessage(trip, mode) : null;
+  const liveToPickup = trip ? shouldShowLiveNavToPickup(trip, s) : !isHeadingToDestination(s) && s !== 'ARRIVED';
+  const liveToDest = trip ? shouldShowLiveNavToDest(trip, s) : isHeadingToDestination(s);
 
   if (isTripNavigationEnded(s)) {
     return {
@@ -26,18 +35,28 @@ export function getInAppNavigationMeta(status, mode = 'driver') {
       subtitle: 'Navigation finished',
       showLiveRoute: false,
       etaLabel: 'STATUS',
-      etaValue: 'Complete'
+      etaValue: 'Complete',
+      coordinationHint: null,
     };
   }
 
   if (isHeadingToDestination(s)) {
     return {
       phase: 'to_dest',
-      title: isStaff ? 'Driver en route to destination' : 'Navigate to destination',
-      subtitle: 'Blue line · fastest driving route',
-      showLiveRoute: true,
-      etaLabel: 'TO DESTINATION',
-      etaValue: null
+      title: liveToDest
+        ? isStaff
+          ? 'Driver en route to destination'
+          : 'Navigate to destination'
+        : isStaff
+          ? 'Trip in progress'
+          : 'Coordinate destination by phone',
+      subtitle: liveToDest
+        ? 'Blue line · fastest driving route'
+        : coordHint || 'Destination is text only — call staff passenger',
+      showLiveRoute: liveToDest,
+      etaLabel: liveToDest ? 'TO DESTINATION' : 'PHONE',
+      etaValue: liveToDest ? null : 'No map route',
+      coordinationHint: coordHint,
     };
   }
 
@@ -48,17 +67,27 @@ export function getInAppNavigationMeta(status, mode = 'driver') {
       subtitle: isStaff ? 'Waiting to depart' : 'Passenger pickup point',
       showLiveRoute: false,
       etaLabel: 'AT PICKUP',
-      etaValue: 'Arrived'
+      etaValue: 'Arrived',
+      coordinationHint: coordHint,
     };
   }
 
   return {
     phase: 'to_pickup',
-    title: isStaff ? 'Driver en route to pickup' : 'Navigate to pickup (start)',
-    subtitle: 'Blue line · fastest driving route',
-    showLiveRoute: true,
-    etaLabel: 'TO PICKUP',
-    etaValue: null
+    title: liveToPickup
+      ? isStaff
+        ? 'Driver en route to pickup'
+        : 'Navigate to pickup (start)'
+      : isStaff
+        ? 'Driver assigned'
+        : 'Find staff by phone',
+    subtitle: liveToPickup
+      ? 'Blue line · fastest driving route'
+      : coordHint || 'Start is text only — call staff for location',
+    showLiveRoute: liveToPickup,
+    etaLabel: liveToPickup ? 'TO PICKUP' : 'PHONE',
+    etaValue: liveToPickup ? null : 'No map route',
+    coordinationHint: coordHint,
   };
 }
 

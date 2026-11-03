@@ -1,96 +1,94 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useDispatch, useSelector } from 'react-redux';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSelector } from 'react-redux';
 import { colors } from '../theme/colors';
 import { useTranslation } from '../i18n';
-import { logoutUser } from '../store/authSlice';
 import BrandLogo from './BrandLogo';
+import { floating, floatingShadow, radius } from '../theme/layout';
+import { type } from '../theme/typography';
 
 export const Header = ({ onOpenProfile }) => {
-  const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+
+  const initials = (user?.full_name || 'U')
+    .split(/\s+/)
+    .map((p) => p[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
-    <View style={styles.headerContainer}>
-      <View style={styles.brandingSection}>
-        <BrandLogo size={38} />
-        <View style={styles.brandText}>
-          <Text style={styles.brandTitle}>{t('appTitle')}</Text>
-          <Text style={styles.brandSubtitle} numberOfLines={1}>
-            {user?.full_name || 'Fleet & Movement'}
-          </Text>
-        </View>
+    <View
+      style={[styles.row, { top: floating.topBar + insets.top }]}
+      pointerEvents="box-none"
+    >
+      <View style={[styles.brandPill, floatingShadow(false)]}>
+        <BrandLogo width={34} height={26} />
+        <Text style={styles.wordmark}>{t('appTitle')}</Text>
       </View>
 
-      <View style={styles.actions}>
-        <TouchableOpacity
-          style={styles.iconBtn}
-          onPress={onOpenProfile}
-          activeOpacity={0.8}
-          accessibilityLabel="Profile"
-        >
-          {user?.avatar_url ? (
-            <Image source={{ uri: user.avatar_url }} style={styles.headerAvatar} />
-          ) : (
-            <Ionicons name="person-circle-outline" size={26} color={colors.primary} />
-          )}
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.logoutBtn}
-          onPress={() => dispatch(logoutUser())}
-          activeOpacity={0.8}
-          accessibilityLabel="Sign out"
-        >
-          <Ionicons name="log-out-outline" size={20} color={colors.primary} />
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity
+        style={[styles.avatarBtn, floatingShadow(false)]}
+        onPress={onOpenProfile}
+        activeOpacity={0.85}
+        accessibilityLabel="Profile"
+      >
+        {user?.avatar_url ? (
+          <Image source={{ uri: user.avatar_url }} style={styles.avatarImg} />
+        ) : (
+          <Text style={styles.initials}>{initials}</Text>
+        )}
+      </TouchableOpacity>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  headerContainer: {
-    backgroundColor: colors.bgSecondary,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderPrimary,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+  row: {
+    position: 'absolute',
+    left: floating.topBar,
+    right: floating.topBar,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between'
+    justifyContent: 'space-between',
+    gap: 8,
+    zIndex: 900,
+    backgroundColor: 'transparent',
   },
-  brandingSection: {
+  brandPill: {
+    height: 44,
+    borderRadius: radius.pill,
+    backgroundColor: colors.card,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    flex: 1,
-    minWidth: 0
+    paddingHorizontal: 14,
+    gap: 8,
+    maxWidth: '72%',
   },
-  brandText: {
-    flex: 1,
-    minWidth: 0
+  wordmark: {
+    ...type.brandWordmark,
+    color: colors.ink,
   },
-  brandTitle: {
-    color: colors.textPrimary,
-    fontSize: 17,
-    fontWeight: '700'
+  avatarBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.pill,
+    backgroundColor: colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
-  brandSubtitle: {
-    color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: '500'
+  avatarImg: {
+    width: 44,
+    height: 44,
   },
-  actions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  iconBtn: { padding: 4 },
-  headerAvatar: { width: 30, height: 30, borderRadius: 15 },
-  logoutBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: colors.primaryMuted
-  }
+  initials: {
+    ...type.buttonOutline,
+    color: colors.primary,
+  },
 });
 
 export default Header;

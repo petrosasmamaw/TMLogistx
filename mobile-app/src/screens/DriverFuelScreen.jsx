@@ -8,6 +8,7 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import LoadingButton from '../components/LoadingButton';
 import { colors } from '../theme/colors';
 import { useTranslation } from '../i18n';
@@ -80,14 +81,17 @@ export default function DriverFuelScreen({ onBack }) {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>⛽ Fuel Consumption Recorder</Text>
+          <View style={styles.titleRow}>
+            <Ionicons name="water" size={22} color={colors.primary} />
+            <Text style={styles.title}>Fuel Consumption Recorder</Text>
+          </View>
           <Text style={styles.subtitle}>Log trip fuel or enter historical multi-day field totals</Text>
         </View>
-        {onBack && (
-          <TouchableOpacity onPress={onBack} style={styles.backBtn}>
-            <Text style={styles.backBtnText}>✕ Close</Text>
+        {onBack ? (
+          <TouchableOpacity onPress={onBack} style={styles.backBtn} accessibilityLabel="Close">
+            <Ionicons name="close" size={22} color={colors.mute} />
           </TouchableOpacity>
-        )}
+        ) : null}
       </View>
 
       {/* Mode Switcher */}
@@ -96,17 +100,31 @@ export default function DriverFuelScreen({ onBack }) {
           style={[styles.modeTab, mode === 'MOVEMENT' && styles.modeTabActive]}
           onPress={() => { setMode('MOVEMENT'); setDaysCovered('1'); }}
         >
-          <Text style={[styles.modeTabText, mode === 'MOVEMENT' && styles.modeTabTextActive]}>
-            🚗 Per Movement / Trip
-          </Text>
+          <View style={styles.modeTabInner}>
+            <Ionicons
+              name="car-sport-outline"
+              size={16}
+              color={mode === 'MOVEMENT' ? colors.primary : colors.mute}
+            />
+            <Text style={[styles.modeTabText, mode === 'MOVEMENT' && styles.modeTabTextActive]}>
+              Per Movement / Trip
+            </Text>
+          </View>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.modeTab, mode === 'BULK' && styles.modeTabActive]}
           onPress={() => { setMode('BULK'); setDaysCovered('3'); }}
         >
-          <Text style={[styles.modeTabText, mode === 'BULK' && styles.modeTabTextActive]}>
-            📅 Add for Past Days
-          </Text>
+          <View style={styles.modeTabInner}>
+            <Ionicons
+              name="calendar-outline"
+              size={16}
+              color={mode === 'BULK' ? colors.primary : colors.mute}
+            />
+            <Text style={[styles.modeTabText, mode === 'BULK' && styles.modeTabTextActive]}>
+              Add for Past Days
+            </Text>
+          </View>
         </TouchableOpacity>
       </View>
 
@@ -240,7 +258,7 @@ export default function DriverFuelScreen({ onBack }) {
               </View>
               <View style={styles.recordSub}>
                 <Text style={styles.recordMeta}>
-                  ⛽ {log.liters} Liters • {log.days_covered > 1 ? `Past ${log.days_covered} days` : 'Trip'} • {log.fuel_date}
+                  {log.liters} L • {log.days_covered > 1 ? `Past ${log.days_covered} days` : 'Trip'} • {log.fuel_date}
                 </Text>
                 {log.odometer_reading ? (
                   <Text style={styles.recordOdo}>Odo: {log.odometer_reading} km</Text>
@@ -268,6 +286,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   title: {
     fontSize: 20,
@@ -303,7 +326,13 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 8,
+  },
+  modeTabInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   modeTabActive: {
     backgroundColor: colors.brandPrimary,

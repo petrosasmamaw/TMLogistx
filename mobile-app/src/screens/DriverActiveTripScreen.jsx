@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -21,15 +21,24 @@ import { mapDriverAssignmentToMobile } from '../utils/mapApiTrip';
 import { pickHigherDriverStatus } from '../utils/driverTripStatus';
 import { colors } from '../theme/colors';
 import { useTranslation } from '../i18n';
-import StatusBadge from '../components/StatusBadge';
-import DriverThreeStepStepper from '../components/DriverThreeStepStepper';
 import TripLiveMap from '../components/TripLiveMap';
 import IncidentModal from '../components/IncidentModal';
+import RideMapScreen from '../components/RideMapScreen';
+import { MapDriverProgressOverlay } from '../components/MapTripStatusOverlay';
+import PageShell from '../components/PageShell';
+import { useSheetBanner } from '../context/SheetBannerContext';
 import AnimatedTripCard from '../components/AnimatedTripCard';
-import { formatDistanceDisplay } from '../utils/geo';
+import { formatDistanceDisplay, resolveTripDistanceKm } from '../utils/geo';
+import { getInAppNavigationMeta } from '../utils/tripNavigation';
+import { requiresRouteDistanceCounter } from '../utils/tripLocationRules';
+import DriverTripDistancePanel from '../components/DriverTripDistancePanel';
+import { buildDistanceCompletionPayload } from '../utils/tripDistancePayload';
 import apiClient from '../api/client';
+import store from '../store';
 import { DriverActiveTripSkeleton } from '../components/Skeleton';
 import TripContactCard from '../components/TripContactCard';
+import DriverStandbyEmptyState from '../components/DriverStandbyEmptyState';
+import LoadingButton from '../components/LoadingButton';
 
 function nextAction(status) {
   const s = String(status || '').toUpperCase();
@@ -50,8 +59,15 @@ export const DriverActiveTripScreen = ({ onNavigateToAssigned }) => {
   const activeTrip = useSelector((state) => state.trips.activeTrip);
   const driverLoading = useSelector((state) => state.trips.driverLoading);
   const hasLoadedDriver = useSelector((state) => state.trips.hasLoadedDriverAssignments);
-  const gps = useSelector((state) => state.gps);
+  const gps = useSelector((state) => state.gps.currentLocation);
   const user = useSelector((state) => state.auth.user);
+  const sheetBanner = useSheetBanner();
+  const distancePayloadRef = useRef(null);
+  const distancePanelRef = useRef(null);
+
+  const onDistanceReady = useCallback((payload) => {
+    distancePayloadRef.current = payload;
+  }, []);
 
   const [incidentModalVisible, setIncidentModalVisible] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
@@ -81,8 +97,16 @@ export const DriverActiveTripScreen = ({ onNavigateToAssigned }) => {
   const handleStatusTransition = async (nextStatus) => {
     if (!activeTrip) return;
     const tripKey = activeTrip.assignment_id || activeTrip.id;
-    const lat = gps.currentLocation?.latitude;
-    const lng = gps.currentLocation?.longitude;
+    const lat = gps.latitude;
+    const lng = gps.longitude;
+
+    if (nextStatus === 'COMPLETED' && requiresRouteDistanceCounter(activeTrip)) {
+      try {
+        await distancePanelRef.current?.endCounter?.();
+      } catch {
+        /* location optional at end */
+      }
+    }
 
     setPendingStep(nextStatus);
     const optimistic = pickHigherDriverStatus(activeTrip.status, nextStatus);
@@ -104,6 +128,24 @@ export const DriverActiveTripScreen = ({ onNavigateToAssigned }) => {
       if (nextStatus === 'COMPLETED' && lat != null && lng != null) {
         options.drive_end_lat = lat;
         options.drive_end_lng = lng;
+        if (requiresRouteDistanceCounter(activeTrip)) {
+          const session = store.getState().gps.driveSession;
+          const refPayload = distancePayloadRef.current;
+          if (refPayload?.distance_source === 'MANUAL' && refPayload.actual_distance_km > 0) {
+            Object.assign(options, refPayload);
+          } else {
+            Object.assign(
+              options,
+              buildDistanceCompletionPayload(session, false, '', activeTrip)
+            );
+          }
+        } else {
+          const km = resolveTripDistanceKm(activeTrip);
+          if (km != null) {
+            options.actual_distance_km = km;
+            options.distance_source = 'MAP_ESTIMATE';
+          }
+        }
       }
 
       const res = await apiClient.updateTripStatus(tripKey, nextStatus, options);
@@ -126,6 +168,7 @@ export const DriverActiveTripScreen = ({ onNavigateToAssigned }) => {
         dispatch(clearActiveTrip());
         dispatch(bumpDriverStats());
         await dispatch(refreshDriverAssignments({ silent: true }));
+        distancePanelRef.current?.resetCounter?.();
         Alert.alert('Trip closed', 'This ride is complete and visible to coordinators.');
       }
     } catch (err) {
@@ -143,27 +186,28 @@ export const DriverActiveTripScreen = ({ onNavigateToAssigned }) => {
 
   if (!activeTrip) {
     return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyTitle}>{t('noAssignedTrips')}</Text>
-        <Text style={styles.emptyDesc}>{t('noAssignedTripsDesc')}</Text>
-        <TouchableOpacity style={styles.viewAssignedBtn} onPress={onNavigateToAssigned}>
-          <Text style={styles.viewAssignedBtnText}>{t('tabAssigned')}</Text>
-        </TouchableOpacity>
-      </View>
+      <PageShell contentKey="driver-empty" banner={sheetBanner}>
+        <DriverStandbyEmptyState
+          title={t('noAssignedTrips')}
+          description={t('noAssignedTripsDesc')}
+          ctaLabel={t('tabAssigned')}
+          onPress={onNavigateToAssigned}
+        />
+      </PageShell>
     );
   }
 
   if (activeTrip.status === 'ASSIGNED') {
     return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyTitle}>Accept this trip first</Text>
-        <Text style={styles.emptyDesc}>
-          Open the Trips tab, accept the assignment, then return here for Arrive → Start → End.
-        </Text>
-        <TouchableOpacity style={styles.viewAssignedBtn} onPress={onNavigateToAssigned}>
-          <Text style={styles.viewAssignedBtnText}>Go to Trips</Text>
-        </TouchableOpacity>
-      </View>
+      <PageShell contentKey="driver-gate" banner={sheetBanner}>
+        <DriverStandbyEmptyState
+          title="Accept this trip first"
+          description="Open the Trips tab, accept the assignment, then return here for Arrive → Start → End."
+          ctaLabel="Go to Trips"
+          onPress={onNavigateToAssigned}
+          showStandbyBadge={false}
+        />
+      </PageShell>
     );
   }
 
@@ -174,9 +218,63 @@ export const DriverActiveTripScreen = ({ onNavigateToAssigned }) => {
   const stepKey = action?.key || pendingStep;
   const stepLabel = action?.label || '3. End trip';
   const distanceLabel = formatDistanceDisplay(activeTrip);
+  const navMeta = getInAppNavigationMeta(activeTrip.status, 'driver', activeTrip);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <RideMapScreen
+      contentKey={`driver-active-${activeTrip.id}`}
+      mapFlex={0.58}
+      banner={sheetBanner}
+      map={
+        <>
+          <TripLiveMap
+            mode="driver"
+            fillContainer
+            showChrome={false}
+            tripStatus={activeTrip.status}
+            trip={activeTrip}
+            pickupLat={activeTrip.pickup_latitude}
+            pickupLng={activeTrip.pickup_longitude}
+            destLat={activeTrip.destination_latitude}
+            destLng={activeTrip.destination_longitude}
+            driverLat={gps?.latitude}
+            driverLng={gps?.longitude}
+            speedKmh={gps?.speedKmh ?? 0}
+            heading={gps?.heading ?? 0}
+            distanceKm={distanceLabel}
+          />
+          <MapDriverProgressOverlay
+            status={activeTrip.status}
+            requestLabel={activeTrip.request_number}
+          />
+        </>
+      }
+    >
+      <View style={styles.content}>
+      {navMeta.coordinationHint ? (
+        <View style={styles.coordBanner}>
+          <Text style={styles.coordBannerText}>{navMeta.coordinationHint}</Text>
+        </View>
+      ) : null}
+      <View style={styles.actionPanel}>
+        {showStepButton ? (
+          <LoadingButton
+            onPress={() => stepKey && handleStatusTransition(stepKey)}
+            loading={updatingStatus && pendingStep === stepKey}
+            loadingLabel={stepPendingLabel(stepKey)}
+            label={stepLabel}
+            disabled={updatingStatus}
+            style={styles.primaryActionBtn}
+          />
+        ) : null}
+        <LoadingButton
+          variant="secondary"
+          label="Report Breakdown / Incident"
+          onPress={() => setIncidentModalVisible(true)}
+          style={styles.incidentBtn}
+        />
+      </View>
+
       <AnimatedTripCard>
         <View style={styles.headerRow}>
           <View>
@@ -185,7 +283,6 @@ export const DriverActiveTripScreen = ({ onNavigateToAssigned }) => {
               {[user?.vehicle_model, user?.vehicle_plate].filter(Boolean).join(' • ') || 'Fleet vehicle'}
             </Text>
           </View>
-          <StatusBadge status={activeTrip.status} />
         </View>
       </AnimatedTripCard>
 
@@ -197,44 +294,11 @@ export const DriverActiveTripScreen = ({ onNavigateToAssigned }) => {
         subtitle={activeTrip.passenger_count ? `${activeTrip.passenger_count} passenger(s)` : undefined}
       />
 
-      <AnimatedTripCard delay={60}>
-        <View style={styles.stepperCard}>
-          <Text style={styles.sectionHeading}>Trip progress</Text>
-          <DriverThreeStepStepper currentStatus={activeTrip.status} />
-        </View>
-      </AnimatedTripCard>
-
-      <TripLiveMap
-        mapSessionKey={activeTrip.assignment_id || activeTrip.id}
-        mode="driver"
-        tripStatus={activeTrip.status}
-        height={280}
-        pickupLat={activeTrip.pickup_latitude}
-        pickupLng={activeTrip.pickup_longitude}
-        destLat={activeTrip.destination_latitude}
-        destLng={activeTrip.destination_longitude}
-        driverLat={gps.currentLocation.latitude}
-        driverLng={gps.currentLocation.longitude}
-        speedKmh={gps.currentLocation.speedKmh}
-        heading={gps.currentLocation.heading}
-        distanceKm={distanceLabel}
+      <DriverTripDistancePanel
+        ref={distancePanelRef}
+        trip={activeTrip}
+        onDistanceReady={onDistanceReady}
       />
-
-      {showStepButton && (
-        <TouchableOpacity
-          style={[styles.primaryBtn, updatingStatus && styles.primaryBtnDisabled]}
-          onPress={() => stepKey && handleStatusTransition(stepKey)}
-          disabled={updatingStatus}
-        >
-          <Text style={styles.primaryBtnText}>
-            {updatingStatus && pendingStep === stepKey ? stepPendingLabel(stepKey) : stepLabel}
-          </Text>
-        </TouchableOpacity>
-      )}
-
-      <TouchableOpacity style={styles.incidentActionBtnFull} onPress={() => setIncidentModalVisible(true)}>
-        <Text style={styles.incidentActionBtnText}>Report issue</Text>
-      </TouchableOpacity>
 
       <IncidentModal
         visible={incidentModalVisible}
@@ -242,52 +306,38 @@ export const DriverActiveTripScreen = ({ onNavigateToAssigned }) => {
         trip={activeTrip}
         onReportSuccess={() => {}}
       />
-    </ScrollView>
+      </View>
+    </RideMapScreen>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bgPrimary },
-  content: { padding: 16, paddingBottom: 40 },
-  emptyContainer: {
-    flex: 1,
-    backgroundColor: colors.bgPrimary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24
+  content: { paddingBottom: 24 },
+  coordBanner: {
+    backgroundColor: colors.bgSecondary,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.borderSecondary,
   },
-  emptyTitle: { color: colors.textPrimary, fontSize: 18, fontWeight: '800', marginBottom: 6 },
-  emptyDesc: { color: colors.textMuted, fontSize: 13, textAlign: 'center', marginBottom: 16 },
-  viewAssignedBtn: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12
+  coordBannerText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 17,
   },
-  viewAssignedBtnText: { color: '#fff', fontWeight: '700' },
+  actionPanel: {
+    gap: 10,
+    marginBottom: 14,
+  },
+  primaryActionBtn: { marginTop: 0 },
+  incidentBtn: { marginTop: 0 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   requestNum: { fontSize: 16, fontWeight: '800', color: colors.textPrimary },
   vehicleInfo: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
   stepperCard: { paddingVertical: 4 },
   sectionHeading: { fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 8 },
-  primaryBtn: {
-    backgroundColor: colors.primary,
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: 'center',
-    marginTop: 16
-  },
-  primaryBtnDisabled: { opacity: 0.65 },
-  primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 15 },
-  incidentActionBtnFull: {
-    marginTop: 12,
-    paddingVertical: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center'
-  },
-  incidentActionBtnText: { color: colors.textMuted, fontWeight: '600' }
 });
 
 export default DriverActiveTripScreen;

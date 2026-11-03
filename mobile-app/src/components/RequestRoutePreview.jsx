@@ -4,10 +4,11 @@ import { WebView } from 'react-native-webview';
 import { colors } from '../theme/colors';
 import { MapSkeleton } from './Skeleton';
 import { buildRequestPreviewMapHtml } from '../utils/tripMapHtml';
+import { getDestinationMarkerIconUri, getStaffMarkerIconUri } from '../utils/mapMarkerAssets';
 import { mapboxDrivingRoute } from '../utils/mapbox';
 
 /** Start → end driving route preview on the request form */
-export default function RequestRoutePreview({ pickupLat, pickupLng, destLat, destLng }) {
+export default function RequestRoutePreview({ pickupLat, pickupLng, destLat, destLng, compact = false }) {
   const mapHostId = useId().replace(/:/g, '');
   const [planRouteCoords, setPlanRouteCoords] = useState([]);
   const [distanceKm, setDistanceKm] = useState(null);
@@ -39,6 +40,9 @@ export default function RequestRoutePreview({ pickupLat, pickupLng, destLat, des
   const centerLat = (pickupLat + destLat) / 2;
   const centerLng = (pickupLng + destLng) / 2;
 
+  const destIconUrl = getDestinationMarkerIconUri();
+  const staffIconUrl = getStaffMarkerIconUri();
+
   const html = useMemo(
     () =>
       buildRequestPreviewMapHtml({
@@ -48,9 +52,11 @@ export default function RequestRoutePreview({ pickupLat, pickupLng, destLat, des
         pickupLng,
         destLat,
         destLng,
-        planRouteCoords
+        planRouteCoords,
+        destIconUrl,
+        staffIconUrl,
       }),
-    [centerLat, centerLng, pickupLat, pickupLng, destLat, destLng, planRouteCoords]
+    [centerLat, centerLng, pickupLat, pickupLng, destLat, destLng, planRouteCoords, destIconUrl, staffIconUrl]
   );
 
   useEffect(() => {
@@ -77,6 +83,17 @@ export default function RequestRoutePreview({ pickupLat, pickupLng, destLat, des
   }, [html, mapHostId, ready]);
 
   if (!ready) return null;
+
+  if (compact) {
+    return (
+      <View style={styles.compactRow}>
+        <Text style={styles.compactLabel}>Route distance (straight-line fallback)</Text>
+        <Text style={styles.compactVal}>
+          {distanceKm != null ? `${distanceKm} km` : routeLoading ? '…' : '—'}
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.wrap}>
@@ -108,5 +125,18 @@ const styles = StyleSheet.create({
   mapBox: { height: 160, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: colors.borderSecondary },
   webHost: { flex: 1, width: '100%', height: '100%' },
   webview: { flex: 1, backgroundColor: 'transparent' },
-  dist: { marginTop: 6, color: colors.amber, fontSize: 12, fontWeight: '700' }
+  dist: { marginTop: 6, color: colors.primary, fontSize: 12, fontWeight: '700' },
+  compactRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: colors.bg,
+    borderRadius: 16,
+  },
+  compactLabel: { fontSize: 12, color: colors.mute, fontWeight: '600', flex: 1 },
+  compactVal: { fontSize: 16, fontWeight: '800', color: colors.primary },
 });

@@ -1,15 +1,20 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { colors } from '../theme/colors';
+import { radius, spacing } from '../theme/layout';
+import { type } from '../theme/typography';
 
-export default function NotificationPermissionBanner({ permission, onAllow, role }) {
+export default function NotificationPermissionBanner({
+  permission,
+  onAllow,
+  role,
+  compact = false,
+}) {
   if (permission === 'granted' || permission === 'unsupported') return null;
 
   const blocked = permission === 'denied';
   const what =
-    role === 'DRIVER'
-      ? 'new trip assignments'
-      : 'driver assignment and arrival alerts';
+    role === 'DRIVER' ? 'new trip assignments' : 'driver assignment and arrival alerts';
   const message = blocked
     ? Platform.OS === 'web'
       ? `Notifications are blocked. Click the lock icon in the address bar and allow notifications to get ${what}.`
@@ -17,7 +22,7 @@ export default function NotificationPermissionBanner({ permission, onAllow, role
     : `Allow notifications to get ${what}.`;
 
   return (
-    <View style={styles.banner}>
+    <View style={[styles.banner, compact && styles.bannerCompact]}>
       <Text style={styles.text}>{message}</Text>
       {!(blocked && Platform.OS === 'web') && (
         <TouchableOpacity onPress={onAllow} style={styles.button} accessibilityRole="button">
@@ -32,30 +37,34 @@ const styles = StyleSheet.create({
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginHorizontal: 12,
-    marginTop: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#fcd34d',
-    backgroundColor: colors.warningMuted
+    gap: spacing.lg,
+    marginBottom: spacing.xl,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.input,
+    backgroundColor: colors.liveSoft,
+  },
+  bannerCompact: {
+    marginHorizontal: 0,
   },
   text: {
     flex: 1,
-    fontSize: 12,
-    color: '#78350f'
+    ...type.subtitle,
+    color: colors.liveText,
   },
   button: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: colors.warning
+    minHeight: 44,
+    minWidth: 44,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.chip,
+    borderWidth: 1.5,
+    borderColor: colors.line,
+    backgroundColor: colors.card,
+    justifyContent: 'center',
   },
   buttonText: {
-    color: colors.textInverse,
-    fontSize: 12,
-    fontWeight: '700'
-  }
+    ...type.chip,
+    color: colors.ink,
+  },
 });

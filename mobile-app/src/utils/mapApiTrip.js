@@ -44,7 +44,13 @@ export function normalizeAssignmentForMobileMap(assignment) {
 /** Map API /requests/my rows to mobile trip shape */
 export function mapApiRequestToMobile(row) {
   if (!row) return null;
-  if (row.pickup_location && row.request_number && row.assignment === undefined) return row;
+  if (row.pickup_location && row.request_number && row.assignment === undefined) {
+    return {
+      ...row,
+      pickup_location_source: row.pickup_location_source,
+      destination_location_source: row.destination_location_source,
+    };
+  }
 
   const a = row.assignment;
   const status = resolveMobileTripStatus(row.status, a?.status);
@@ -90,7 +96,8 @@ export function mapApiRequestToMobile(row) {
     staff_meter_started: !!a?.staff_meter_started_at,
     staff_meter_ended: !!a?.staff_meter_ended_at,
     actual_distance_km: a?.actual_distance_km,
-    distance_km: a?.actual_distance_km ?? row.distance_km,
+    estimated_distance_km: a?.estimated_distance_km ?? row.estimated_distance_km,
+    distance_km: a?.actual_distance_km ?? a?.estimated_distance_km ?? row.distance_km,
     external_authorized: row.external_authorized,
     external_provider: row.external_provider,
     external_status: row.external_status,
@@ -128,6 +135,9 @@ export function mapDriverAssignmentToMobile(assignment) {
     destination_location: req.destination_address,
     destination_latitude: req.destination_lat,
     destination_longitude: req.destination_lng,
+    pickup_location_source: req.pickup_location_source,
+    destination_location_source: req.destination_location_source,
+    map_estimated_distance_km: req.map_estimated_distance_km,
     purpose: req.purpose,
     status: assignment.status,
     passenger_count: req.passenger_count,

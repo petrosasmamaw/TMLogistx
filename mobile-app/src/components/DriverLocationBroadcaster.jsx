@@ -6,6 +6,10 @@ import apiClient from '../api/client';
 import { store } from '../store';
 import { updateLocation } from '../store/gpsSlice';
 import {
+  getFreshDevicePositionAsync,
+  watchLocationOptions,
+} from '../utils/deviceLocation';
+import {
   DRIVER_LOCATION_TASK,
   persistGpsContext
 } from '../location/driverLocationTask';
@@ -129,12 +133,18 @@ export default function DriverLocationBroadcaster() {
       };
       intervalId = setInterval(refreshTargets, 120000);
 
+      try {
+        const pos = await getFreshDevicePositionAsync();
+        if (!cancelled) sendPing(pos.coords);
+      } catch {
+        /* watch continues */
+      }
+
       watchRef.current = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.Balanced,
+        watchLocationOptions({
           timeInterval: INTERVAL_MS,
-          distanceInterval: 20
-        },
+          distanceInterval: 15,
+        }),
         (loc) => {
           if (!cancelled) sendPing(loc.coords);
         }
@@ -144,9 +154,10 @@ export default function DriverLocationBroadcaster() {
         const started = await Location.hasStartedLocationUpdatesAsync(DRIVER_LOCATION_TASK);
         if (!started) {
           await Location.startLocationUpdatesAsync(DRIVER_LOCATION_TASK, {
-            accuracy: Location.Accuracy.Balanced,
-            timeInterval: INTERVAL_MS,
-            distanceInterval: 25,
+            ...watchLocationOptions({
+              timeInterval: INTERVAL_MS,
+              distanceInterval: 20,
+            }),
             showsBackgroundLocationIndicator: true,
             foregroundService: {
               notificationTitle: 'TMLogistx',

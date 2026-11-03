@@ -6,15 +6,34 @@ import {
   TouchableOpacity,
   StyleSheet,
   Platform,
-  ActivityIndicator
+  useWindowDimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import { colors } from '../theme/colors';
 import { buildLeafletPickerHtml } from '../utils/leafletMapHtml';
 import { getMapboxAccessToken, getMapboxLeafletTileOptions, getMapboxStyleId } from '../utils/mapbox';
 import { MapSkeleton } from './Skeleton';
+import AppText from './ui/AppText';
+import { radius, spacing } from '../theme/layout';
 
 const MAP_HOST_ID = 'tmlogistx-map-picker-host';
+
+function pinHtml(color) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="42" viewBox="0 0 24 24"><path fill="${color}" stroke="#ffffff" stroke-width="1.1" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.2" fill="#ffffff"/></svg>`;
+  return `<div style="width:34px;height:42px;line-height:0;filter:drop-shadow(0 3px 6px rgba(15,31,25,.3))">${svg}</div>`;
+}
+
+function pickerMarkerIcon(L, kind) {
+  const color = kind === 'destination' ? '#d64545' : '#0b7a5a';
+  return L.divIcon({
+    className: '',
+    html: pinHtml(color),
+    iconSize: [34, 42],
+    iconAnchor: [17, 38],
+  });
+}
 
 /**
  * Tap-to-pick map: Leaflet in WebView on iOS/Android, DOM Leaflet on web.
@@ -22,11 +41,16 @@ const MAP_HOST_ID = 'tmlogistx-map-picker-host';
 export default function MapLocationPicker({
   visible,
   title = 'Select on map',
-  initialLat = 9.02,
-  initialLng = 38.75,
+  initialLat = 9.0192,
+  initialLng = 38.7525,
+  markerKind = 'pickup',
   onConfirm,
-  onClose
+  onClose,
 }) {
+  const insets = useSafeAreaInsets();
+  const { height: winH } = useWindowDimensions();
+  const mapHeight = Math.max(320, Math.round(winH * 0.52));
+  const pinColor = markerKind === 'destination' ? colors.danger : colors.primary;
   const mapInstanceRef = useRef(null);
   const markerRef = useRef(null);
   const [picked, setPicked] = useState({ lat: initialLat, lng: initialLng });
@@ -79,22 +103,27 @@ export default function MapLocationPicker({
         }
 
         const L = window.L;
-        const map = L.map(host, { scrollWheelZoom: true }).setView([initialLat, initialLng], 14);
+        const map = L.map(host, { scrollWheelZoom: true }).setView([initialLat, initialLng], 15);
         const mb = getMapboxLeafletTileOptions();
         if (mb) {
           L.tileLayer(mb.url, {
             attribution: mb.attribution,
             tileSize: mb.tileSize,
             zoomOffset: mb.zoomOffset,
-            maxZoom: mb.maxZoom
+            maxZoom: mb.maxZoom,
           }).addTo(map);
         } else {
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap'
+          L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            subdomains: 'abcd',
+            maxZoom: 19,
+            attribution: '© OpenStreetMap · CARTO',
           }).addTo(map);
         }
 
-        const marker = L.marker([initialLat, initialLng], { draggable: true }).addTo(map);
+        const marker = L.marker([initialLat, initialLng], {
+          draggable: true,
+          icon: pickerMarkerIcon(L, markerKind),
+        }).addTo(map);
         marker.on('dragend', () => {
           const { lat, lng } = marker.getLatLng();
           setPicked({ lat, lng });
@@ -107,7 +136,7 @@ export default function MapLocationPicker({
         mapInstanceRef.current = map;
         markerRef.current = marker;
         setReady(true);
-        setTimeout(() => map.invalidateSize(), 150);
+        setTimeout(() => map.invalidateSize(), 200);
       } catch {
         setReady(true);
       }
@@ -122,31 +151,42 @@ export default function MapLocationPicker({
         mapInstanceRef.current = null;
       }
     };
-  }, [visible, initialLat, initialLng]);
+  }, [visible, initialLat, initialLng, markerKind]);
 
   const handleConfirm = () => {
     onConfirm?.(picked.lat, picked.lng);
     onClose?.();
   };
 
-  const mapHtml = buildLeafletPickerHtml(initialLat, initialLng, 14, {
+  const mapHtml = buildLeafletPickerHtml(initialLat, initialLng, 15, {
     accessToken: getMapboxAccessToken(),
-    style: getMapboxStyleId()
+    style: getMapboxStyleId(),
+    markerKind,
   });
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={styles.sheet}>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.hint}>Tap the map or drag the pin to set the point.</Text>
+      <View style={[styles.overlay, { paddingTop: insets.top + spacing.md }]}>
+        <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}>
+          <View style={styles.headerRow}>
+            <View style={[styles.pinBadge, { backgroundColor: pinColor }]}>
+              <Ionicons name="location" size={20} color="#fff" />
+            </View>
+            <View style={styles.headerText}>
+              <AppText style={styles.title}>{title}</AppText>
+              <AppText style={styles.hint}>Tap the map or drag the pin, then confirm.</AppText>
+            </View>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close">
+              <Ionicons name="close" size={24} color={colors.ink} />
+            </TouchableOpacity>
+          </View>
 
-          <View style={styles.mapWrap}>
+          <View style={[styles.mapWrap, { height: mapHeight }]}>
             {Platform.OS === 'web' ? (
               <View nativeID={MAP_HOST_ID} style={styles.mapHost} />
             ) : visible ? (
               <WebView
-                key={`map-${initialLat}-${initialLng}`}
+                key={`map-${markerKind}-${initialLat}-${initialLng}`}
                 style={styles.mapHost}
                 originWhitelist={['*']}
                 javaScriptEnabled
@@ -181,8 +221,12 @@ export default function MapLocationPicker({
             <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.confirmBtn} onPress={handleConfirm}>
-              <Text style={styles.confirmText}>Use this point</Text>
+            <TouchableOpacity
+              style={[styles.confirmBtn, markerKind === 'destination' && styles.confirmBtnDest]}
+              onPress={handleConfirm}
+            >
+              <Ionicons name="checkmark-circle" size={18} color="#fff" />
+              <Text style={styles.confirmText}>Select location</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -195,61 +239,67 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'flex-end'
+    justifyContent: 'flex-end',
   },
   sheet: {
     backgroundColor: colors.bgSecondary,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 16,
-    maxHeight: '92%'
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
+    padding: spacing.xl,
+    maxHeight: '94%',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  pinBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerText: { flex: 1, minWidth: 0 },
+  closeBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
     color: colors.textPrimary,
     fontSize: 18,
-    fontWeight: '800'
+    fontWeight: '800',
   },
   hint: {
     color: colors.textMuted,
     fontSize: 12,
     marginTop: 4,
-    marginBottom: 10
   },
   mapWrap: {
     position: 'relative',
-    height: 360,
-    borderRadius: 12,
+    borderRadius: radius.input,
     overflow: 'hidden',
-    backgroundColor: colors.bgTertiary
+    backgroundColor: colors.bgTertiary,
   },
   mapHost: {
     flex: 1,
     width: '100%',
     height: '100%',
-    backgroundColor: colors.bgTertiary
-  },
-  loading: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(248,250,252,0.92)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8
-  },
-  loadingText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600'
+    backgroundColor: colors.bgTertiary,
   },
   coords: {
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     fontSize: 11,
     color: colors.textMuted,
-    marginTop: 8
+    marginTop: 8,
   },
   actions: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 14
+    marginTop: 14,
   },
   cancelBtn: {
     flex: 1,
@@ -257,21 +307,27 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.borderPrimary,
-    alignItems: 'center'
+    alignItems: 'center',
   },
   cancelText: {
     color: colors.textSecondary,
-    fontWeight: '700'
+    fontWeight: '700',
   },
   confirmBtn: {
-    flex: 1,
+    flex: 1.4,
+    flexDirection: 'row',
+    gap: 8,
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: radius.button,
     backgroundColor: colors.primary,
-    alignItems: 'center'
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmBtnDest: {
+    backgroundColor: colors.danger,
   },
   confirmText: {
     color: '#fff',
-    fontWeight: '800'
-  }
+    fontWeight: '800',
+  },
 });

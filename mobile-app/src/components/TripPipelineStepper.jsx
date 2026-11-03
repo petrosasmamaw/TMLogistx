@@ -1,6 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
+import { type } from '../theme/typography';
+
 const PIPELINE_STAGES = [
   { index: 1, label: 'Requested' },
   { index: 2, label: 'Accepted' },
@@ -24,38 +27,37 @@ export const TripPipelineStepper = ({ currentStatus }) => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.trackLine}>
-        <View
-          style={[
-            styles.trackLineProgress,
-            { width: `${Math.min(100, Math.max(0, ((currentIndex - 1) / 4) * 100))}%` }
-          ]}
-        />
-      </View>
-
       <View style={styles.stepsRow}>
-        {PIPELINE_STAGES.map((stage) => {
+        {PIPELINE_STAGES.map((stage, i) => {
           const isDone = currentIndex > stage.index;
           const isActive = currentIndex === stage.index;
-          const label = stage.label;
+          const showConnector = i > 0;
 
           return (
             <View key={stage.index} style={styles.stepItem}>
+              {showConnector ? (
+                <View
+                  style={[
+                    styles.connector,
+                    (isDone || isActive) && styles.connectorDone,
+                  ]}
+                />
+              ) : null}
               <View
                 style={[
                   styles.stepNode,
                   isDone && styles.stepNodeDone,
                   isActive && styles.stepNodeActive,
+                  isActive && styles.stepNodeActiveRing,
                 ]}
               >
-                <Text
-                  style={[
-                    styles.stepNodeText,
-                    (isDone || isActive) && styles.stepNodeTextActive,
-                  ]}
-                >
-                  {isDone ? 'OK' : stage.index}
-                </Text>
+                {isDone ? (
+                  <Ionicons name="checkmark" size={12} color={colors.onPrimary} />
+                ) : (
+                  <Text style={[styles.stepNodeText, isActive && styles.stepNodeTextActive]}>
+                    {stage.index}
+                  </Text>
+                )}
               </View>
               <Text
                 style={[
@@ -65,7 +67,7 @@ export const TripPipelineStepper = ({ currentStatus }) => {
                 ]}
                 numberOfLines={1}
               >
-                {label}
+                {stage.label}
               </Text>
             </View>
           );
@@ -77,71 +79,67 @@ export const TripPipelineStepper = ({ currentStatus }) => {
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: 14,
-    position: 'relative',
-    marginVertical: 4,
-  },
-  trackLine: {
-    position: 'absolute',
-    top: 28,
-    left: '10%',
-    right: '10%',
-    height: 3,
-    backgroundColor: colors.bgTertiary,
-    zIndex: 1,
-  },
-  trackLineProgress: {
-    height: 3,
-    backgroundColor: colors.amber,
+    marginVertical: 6,
+    marginBottom: 14,
   },
   stepsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    zIndex: 2,
   },
   stepItem: {
+    flex: 1,
     alignItems: 'center',
-    width: 60,
+    position: 'relative',
+  },
+  connector: {
+    position: 'absolute',
+    top: 10,
+    left: '-50%',
+    right: '50%',
+    height: 2,
+    backgroundColor: colors.line,
+    zIndex: 0,
+  },
+  connectorDone: {
+    backgroundColor: colors.primary,
   },
   stepNode: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.bgTertiary,
-    borderWidth: 2,
-    borderColor: colors.borderSecondary,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.line,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 6,
+    zIndex: 1,
   },
   stepNodeDone: {
-    backgroundColor: colors.success,
-    borderColor: colors.success,
+    backgroundColor: colors.primary,
   },
   stepNodeActive: {
-    backgroundColor: colors.amber,
-    borderColor: colors.amberLight,
+    backgroundColor: colors.live,
+  },
+  stepNodeActiveRing: {
+    borderWidth: 5,
+    borderColor: colors.liveRing,
   },
   stepNodeText: {
-    color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: '800',
+    ...type.badge,
+    color: colors.mute,
   },
   stepNodeTextActive: {
-    color: '#000',
+    color: colors.onPrimary,
   },
   stepLabel: {
-    color: colors.textMuted,
-    fontSize: 10,
-    fontWeight: '600',
+    ...type.badge,
+    color: colors.mute,
     textAlign: 'center',
   },
   stepLabelActive: {
-    color: colors.amber,
-    fontWeight: '700',
+    color: colors.ink,
   },
   stepLabelDone: {
-    color: colors.textSecondary,
+    color: colors.ink,
   },
 });
 

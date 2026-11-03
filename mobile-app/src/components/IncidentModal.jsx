@@ -8,8 +8,9 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
-  Alert
+  Alert,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { useTranslation } from '../i18n';
 import apiClient from '../api/client';
@@ -78,7 +79,7 @@ export const IncidentModal = ({ visible, onClose, trip, onReportSuccess }) => {
             {/* Header */}
             <View style={styles.header}>
               <View style={styles.alertIconBadge}>
-                <Text style={styles.alertIconText}>⚠️</Text>
+                <Ionicons name="warning" size={22} color={colors.warning} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.title}>{t('incidentModalTitle')}</Text>
@@ -86,8 +87,8 @@ export const IncidentModal = ({ visible, onClose, trip, onReportSuccess }) => {
                   Trip: {trip?.request_number || 'REQ-ACTIVE'} • {trip?.assigned_vehicle_plate || 'AA-3-98214'}
                 </Text>
               </View>
-              <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                <Text style={styles.closeBtnText}>✕</Text>
+              <TouchableOpacity onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close">
+                <Ionicons name="close" size={22} color={colors.mute} />
               </TouchableOpacity>
             </View>
 

@@ -92,7 +92,7 @@ export default function ProjectTripsPanel({ projectId }) {
 
   if (!projectId) {
     return (
-      <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-4">
+      <p className="text-sm text-live-text border-l-[3px] border-live pl-3 py-2 font-medium bg-transparent">
         Your account is not linked to a project. Ask your master person or admin to assign a project.
       </p>
     );
@@ -104,7 +104,7 @@ export default function ProjectTripsPanel({ projectId }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
+      <div className="portal-stat-strip">
         <AdminStatCard
           icon={TrendingUp}
           label="All"
@@ -147,14 +147,10 @@ export default function ProjectTripsPanel({ projectId }) {
         />
       </div>
 
-      <div className="glass-panel rounded-2xl overflow-hidden border border-slate-200">
-        <div className="p-3 border-b border-slate-100 flex items-center justify-between">
-          <span className="text-sm font-bold text-slate-900">Movement requests</span>
-          <button
-            type="button"
-            onClick={load}
-            className="text-xs font-semibold text-brand-600 hover:text-brand-700"
-          >
+      <div className="mb-4">
+        <div className="portal-table-title px-0">
+          <span>Movement requests</span>
+          <button type="button" onClick={load} className="portal-link">
             Refresh
           </button>
         </div>
@@ -165,7 +161,7 @@ export default function ProjectTripsPanel({ projectId }) {
             tableRows.map((r) => <TripRequestCard key={r.id} row={r} />)
           )}
         </div>
-        <div className="portal-table-scroll hidden lg:block">
+        <div className="portal-table-scroll hidden lg:block mt-2">
         <table className="w-full text-left text-xs">
           <thead className="bg-slate-50 text-slate-500 uppercase font-semibold border-b">
             <tr>

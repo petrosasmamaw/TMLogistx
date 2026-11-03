@@ -12,11 +12,13 @@ import {
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { loginUser, clearAuthError } from '../store/authSlice';
-import { colors } from '../theme/colors';
+import { colors, shadows } from '../theme/colors';
+import { radius } from '../theme/layout';
 import { useTranslation } from '../i18n';
 import { Ionicons } from '@expo/vector-icons';
 import LoadingButton from '../components/LoadingButton';
 import BrandLogo from '../components/BrandLogo';
+import InfoRow from '../components/ui/InfoRow';
 import ForgotPasswordScreen from './ForgotPasswordScreen';
 import ResetPasswordScreen from './ResetPasswordScreen';
 
@@ -64,7 +66,9 @@ export const AuthScreen = ({ resetToken, onResetDone }) => {
     >
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.heroSection}>
-          <BrandLogo size={64} style={styles.logoBadge} />
+          <View style={styles.logoTile}>
+            <BrandLogo width={132} height={102} />
+          </View>
           <Text style={styles.appTitle}>{t('appTitle')}</Text>
           <Text style={styles.appSubtitle}>{t('appSubtitle')}</Text>
         </View>
@@ -82,29 +86,23 @@ export const AuthScreen = ({ resetToken, onResetDone }) => {
           ) : null}
 
           <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={styles.input}
+          <InfoRow
+            editable
             value={email}
             onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            autoComplete="email"
-            editable={!loading}
             placeholder="name@tmlogistx.com"
-            placeholderTextColor={colors.textMuted}
+            keyboardType="email-address"
           />
 
           <Text style={styles.label}>Password</Text>
           <View style={styles.passwordRow}>
-            <TextInput
-              style={[styles.input, styles.passwordInput]}
+            <InfoRow
+              editable
               value={password}
               onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              autoComplete="password"
-              editable={!loading}
               placeholder="••••••••••••"
-              placeholderTextColor={colors.textMuted}
+              secureTextEntry={!showPassword}
+              style={styles.passwordInputRow}
             />
             <TouchableOpacity
               accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
@@ -112,7 +110,7 @@ export const AuthScreen = ({ resetToken, onResetDone }) => {
               style={styles.eyeBtn}
               disabled={loading}
             >
-              <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color={colors.textMuted} />
+              <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color={colors.mute} />
             </TouchableOpacity>
           </View>
 
@@ -136,7 +134,7 @@ export const AuthScreen = ({ resetToken, onResetDone }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bgPrimary,
+    backgroundColor: colors.bg,
   },
   scrollContent: {
     padding: 20,
@@ -169,31 +167,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginVertical: 24,
   },
-  logoBadge: {
+  logoTile: {
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 12,
   },
   appTitle: {
-    color: colors.textPrimary,
-    fontSize: 26,
-    fontWeight: '900',
-    letterSpacing: 0.5,
+    color: colors.ink,
+    fontSize: 24,
+    fontWeight: '800',
   },
   appSubtitle: {
-    color: colors.textSecondary,
+    color: colors.mute,
     fontSize: 13,
     marginTop: 4,
     textAlign: 'center',
   },
   formCard: {
-    paddingVertical: 16,
+    backgroundColor: colors.card,
+    borderRadius: radius.sheet,
+    padding: 18,
     marginVertical: 8,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.borderPrimary,
+    ...shadows.floating,
   },
   cardTitle: {
-    color: colors.textPrimary,
-    fontSize: 16,
+    color: colors.ink,
+    fontSize: 20,
     fontWeight: '700',
     marginBottom: 6,
   },
@@ -224,39 +223,42 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   input: {
-    backgroundColor: colors.bgInput,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderPrimary,
+    backgroundColor: colors.bg,
+    borderRadius: radius.input,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: colors.textPrimary,
-    fontSize: 14,
+    paddingVertical: 14,
+    color: colors.ink,
+    fontSize: 15,
     marginBottom: 8,
+    minHeight: 52,
   },
   passwordRow: {
     position: 'relative',
     marginBottom: 8,
   },
-  passwordInput: {
-    marginBottom: 0,
+  passwordInputRow: {
     paddingRight: 44,
   },
   eyeBtn: {
     position: 'absolute',
     right: 8,
-    top: 8,
-    padding: 4,
+    top: 12,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   forgotLink: {
     alignSelf: 'flex-end',
     marginTop: 4,
-    marginBottom: 4
+    marginBottom: 4,
+    minHeight: 44,
+    justifyContent: 'center',
   },
   forgotText: {
     color: colors.primary,
-    fontSize: 12,
-    fontWeight: '700'
+    fontSize: 14,
+    fontWeight: '700',
   },
   loginBtn: {
     marginTop: 14,

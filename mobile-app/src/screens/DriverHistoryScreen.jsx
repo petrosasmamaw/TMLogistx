@@ -132,12 +132,18 @@ export const DriverHistoryScreen = () => {
               </View>
 
               <View style={styles.routeBox}>
-                <Text style={styles.routeText} numberOfLines={1}>
-                  🟢 {trip.pickup_location || 'Pickup'}
-                </Text>
-                <Text style={styles.routeText} numberOfLines={1}>
-                  🔴 {trip.destination_location || 'Destination'}
-                </Text>
+                <View style={styles.routeLine}>
+                  <View style={[styles.routeDot, { backgroundColor: colors.primary }]} />
+                  <Text style={styles.routeText} numberOfLines={1}>
+                    {trip.pickup_location || 'Pickup'}
+                  </Text>
+                </View>
+                <View style={styles.routeLine}>
+                  <View style={[styles.routeDot, { backgroundColor: colors.danger }]} />
+                  <Text style={styles.routeText} numberOfLines={1}>
+                    {trip.destination_location || 'Destination'}
+                  </Text>
+                </View>
               </View>
 
               <View style={styles.tripFooter}>
@@ -311,12 +317,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   routeBox: {
-    backgroundColor: colors.bgInput,
-    borderRadius: 6,
-    padding: 8,
     gap: 4,
     marginVertical: 4,
   },
+  routeLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  routeDot: { width: 8, height: 8, borderRadius: 4 },
   routeText: {
     color: colors.textPrimary,
     fontSize: 11,

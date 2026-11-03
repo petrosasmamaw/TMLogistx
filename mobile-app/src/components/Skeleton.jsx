@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Animated, StyleSheet, ScrollView } from 'react-native';
 import { colors } from '../theme/colors';
+import { USE_NATIVE_DRIVER } from '../theme/layout';
 
 export function Skeleton({ style, width, height, borderRadius = 8 }) {
   const opacity = useRef(new Animated.Value(0.45)).current;
@@ -8,8 +9,8 @@ export function Skeleton({ style, width, height, borderRadius = 8 }) {
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(opacity, { toValue: 1, duration: 700, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.45, duration: 700, useNativeDriver: true })
+        Animated.timing(opacity, { toValue: 1, duration: 700, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(opacity, { toValue: 0.45, duration: 700, useNativeDriver: USE_NATIVE_DRIVER })
       ])
     );
     loop.start();

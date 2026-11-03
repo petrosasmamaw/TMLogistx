@@ -12,6 +12,37 @@ export function haversineKm(lat1, lon1, lat2, lon2) {
   return parseFloat((R * c).toFixed(2));
 }
 
+/** Best available distance (km) for a trip row — history, KPIs, labels. */
+export function resolveTripDistanceKm(trip) {
+  if (!trip) return null;
+  const pick = (v) => {
+    if (v == null || v === '') return null;
+    const n = Number(v);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  };
+
+  const fromFields =
+    pick(trip.actual_distance_km) ??
+    pick(trip.distance_km) ??
+    pick(trip.external_distance_km) ??
+    pick(trip.map_estimated_distance_km) ??
+    pick(trip.estimated_distance_km) ??
+    pick(trip.assignment?.actual_distance_km) ??
+    pick(trip.assignment?.estimated_distance_km);
+
+  if (fromFields != null) return parseFloat(fromFields.toFixed(2));
+
+  const mapOnly = resolveMapDistanceKm(trip);
+  if (mapOnly != null) return mapOnly;
+
+  return haversineKm(
+    trip.pickup_latitude ?? trip.pickup_lat,
+    trip.pickup_longitude ?? trip.pickup_lng,
+    trip.destination_latitude ?? trip.destination_lat,
+    trip.destination_longitude ?? trip.destination_lng
+  );
+}
+
 /** Distance shown only when pickup & destination were both chosen on map (not GPS/manual). */
 export function resolveMapDistanceKm(trip) {
   const pickupSrc = trip?.pickup_location_source;

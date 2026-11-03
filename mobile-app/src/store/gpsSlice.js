@@ -40,6 +40,17 @@ const gpsSlice = createSlice({
       state.history.push({ ...state.currentLocation, timestamp: Date.now() });
       if (state.history.length > 30) state.history.shift();
     },
+    clearLocationFix: (state) => {
+      state.currentLocation = {
+        latitude: null,
+        longitude: null,
+        accuracy: null,
+        speedKmh: 0,
+        heading: 0,
+      };
+      state.hasLiveFix = false;
+      state.history = [];
+    },
     toggleBroadcasting: (state) => {
       state.isBroadcasting = !state.isBroadcasting;
     },
@@ -123,6 +134,7 @@ const gpsSlice = createSlice({
 
 export const {
   updateLocation,
+  clearLocationFix,
   toggleBroadcasting,
   simulateStep,
   startDriveTracking,

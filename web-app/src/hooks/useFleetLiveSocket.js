@@ -2,7 +2,15 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchProjects } from '../store/slices/projectSlice.js';
 import { io } from 'socket.io-client';
-import { updateLiveDriverLocation, updateLiveLocation } from '../store/slices/fleetSlice.js';
+import {
+  fetchDrivers,
+  fetchLiveFleet,
+  fetchVehicles,
+  markFleetOnTrip,
+  releaseFleetResources,
+  updateLiveDriverLocation,
+  updateLiveLocation
+} from '../store/slices/fleetSlice.js';
 import {
   fetchRequests,
   upsertRequest,
@@ -32,6 +40,26 @@ const PORTAL_ROLES = [
   'MASTER_PERSON',
   'SYSTEM_ADMIN'
 ];
+
+const TERMINAL_TRIP_STATUSES = new Set(['COMPLETED', 'CANCELLED', 'REJECTED']);
+
+function fleetIdsFromPayload(payload) {
+  const a = payload?.assignment;
+  return {
+    vehicleId: a?.vehicle_id || a?.vehicle?.id || null,
+    driverId: a?.driver_id || a?.driver?.id || null
+  };
+}
+
+function refreshFleetAvailability(dispatch, payload, { release } = {}) {
+  const { vehicleId, driverId } = fleetIdsFromPayload(payload);
+  if (release && (vehicleId || driverId)) {
+    dispatch(releaseFleetResources({ vehicleId, driverId }));
+  }
+  dispatch(fetchVehicles());
+  dispatch(fetchDrivers());
+  dispatch(fetchLiveFleet());
+}
 
 function collectProjectIds(user, projects) {
   const ids = new Set();
@@ -181,10 +209,13 @@ export default function useFleetLiveSocket() {
 
     socket.on('trip_assigned', (payload) => {
       patchFromAssignmentPayload(payload);
+      const { vehicleId, driverId } = fleetIdsFromPayload(payload);
+      if (vehicleId || driverId) dispatch(markFleetOnTrip({ vehicleId, driverId }));
     });
 
     socket.on('trip_reassigned', (payload) => {
       patchFromAssignmentPayload(payload, 'Trip reassigned', 'A trip was reassigned to another driver.');
+      refreshFleetAvailability(dispatch, payload, { release: false });
     });
 
     socket.on('trip_status_changed', (payload) => {
@@ -205,6 +236,9 @@ export default function useFleetLiveSocket() {
         body = 'The movement trip has ended.';
       }
       patchFromAssignmentPayload(payload, title, body);
+      if (status && TERMINAL_TRIP_STATUSES.has(status)) {
+        refreshFleetAvailability(dispatch, payload, { release: true });
+      }
     });
 
     socket.on('fleet_trip_started', (payload) => {
@@ -233,6 +267,7 @@ export default function useFleetLiveSocket() {
           })
         );
       }
+      refreshFleetAvailability(dispatch, payload, { release: true });
     });
 
     const softSync = () => dispatch(fetchRequests({ silent: true }));

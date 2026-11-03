@@ -22,6 +22,7 @@ import apiClient from '../api/client';
 import { notifyOnce } from '../services/localNotifications';
 import { DriverTripListSkeleton } from '../components/Skeleton';
 import TripContactCard from '../components/TripContactCard';
+import DriverStandbyEmptyState from '../components/DriverStandbyEmptyState';
 
 export const DriverAssignedScreen = ({ onNavigateToActive }) => {
   const dispatch = useDispatch();
@@ -104,19 +105,23 @@ export const DriverAssignedScreen = ({ onNavigateToActive }) => {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>{t('driverConsoleTitle')}</Text>
-        <Text style={styles.subtitle}>{t('driverConsoleSubtitle')}</Text>
-      </View>
+      <ScrollView
+        style={styles.listScroll}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.header}>
+          <Text style={styles.title}>{t('driverConsoleTitle')}</Text>
+          <Text style={styles.subtitle}>{t('driverConsoleSubtitle')}</Text>
+        </View>
 
-      <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
         {driverLoading && !hasLoaded ? (
           <DriverTripListSkeleton rows={3} />
         ) : assignedTrips.length === 0 ? (
-          <View style={styles.emptyView}>
-            <Text style={styles.emptyText}>{t('noAssignedTrips')}</Text>
-          </View>
+          <DriverStandbyEmptyState
+            title={t('noAssignedTrips')}
+            description={t('noAssignedTripsDesc')}
+          />
         ) : (
           assignedTrips.map((trip) => {
             const isPending = trip.status === 'ASSIGNED';
@@ -236,13 +241,11 @@ export const DriverAssignedScreen = ({ onNavigateToActive }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bgPrimary,
+    minHeight: 0,
+    backgroundColor: 'transparent',
   },
   header: {
-    padding: 16,
-    backgroundColor: colors.bgSecondary,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderPrimary,
+    marginBottom: 14,
   },
   title: {
     color: colors.textPrimary,
@@ -254,18 +257,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
+  listScroll: {
+    flex: 1,
+  },
   listContent: {
-    padding: 16,
     paddingBottom: 30,
     gap: 12,
-  },
-  emptyView: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  emptyText: {
-    color: colors.textMuted,
-    fontSize: 14,
   },
   assignmentBanner: {
     backgroundColor: colors.primary + '18',

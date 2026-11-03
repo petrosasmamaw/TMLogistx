@@ -5,20 +5,69 @@
 @layer base {
   body {
     font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-    @apply bg-slate-50 text-slate-800 antialiased;
+    @apply bg-page text-ink antialiased;
+  }
+
+  :focus-visible {
+    outline: 3px solid rgba(11, 122, 90, 0.35);
+    outline-offset: 2px;
   }
 }
 
-/* Light professional surfaces (replaces dark glass) */
-.glass-panel {
-  @apply bg-white border border-slate-200 rounded-xl shadow-sm;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
-/* Leaflet map panes default to z-index 400+ — keep below modals (z-[10000]) */
+.glass-panel {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.glass-card {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.glass-card:hover {
+  border: none;
+  box-shadow: none;
+}
+
+.portal-modal-backdrop .glass-panel,
+.portal-modal-backdrop > form.glass-panel,
+.portal-modal-panel,
+.login-shell .portal-modal-panel {
+  background: #ffffff;
+  border: 1px solid #e6ebe8;
+  border-radius: 20px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.25);
+}
+
+.app-portal .fixed.inset-0.z-50.flex.items-center.justify-center > .glass-panel,
+.app-portal .fixed.inset-0.z-50.flex.items-center.justify-center > form.glass-panel {
+  background: #ffffff;
+  border: 1px solid #e6ebe8;
+  border-radius: 20px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.25);
+}
+
 .fleet-map-root {
   position: relative;
   z-index: 0;
   isolation: isolate;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #dfe7e2;
 }
 
 .fleet-map-root .leaflet-container,
@@ -35,6 +84,8 @@
 .app-portal .portal-modal-backdrop,
 .login-shell .portal-modal-backdrop {
   z-index: 10000 !important;
+  background: rgba(15, 31, 25, 0.38) !important;
+  backdrop-filter: none !important;
 }
 
 .app-portal .portal-modal-panel,
@@ -45,190 +96,150 @@
 
 .app-portal .fixed.inset-0.z-50.flex.items-center.justify-center {
   z-index: 10000 !important;
+  background: rgba(15, 31, 25, 0.38);
+  backdrop-filter: none;
 }
 
-.glass-panel-light {
-  @apply bg-white border border-slate-200 rounded-lg;
+.status-dot,
+.badge-available,
+.badge-busy,
+.badge-maintenance,
+.badge-offline,
+.badge-pending,
+.badge-completed {
+  @apply inline-flex items-center gap-1.5 bg-transparent border-0 rounded-none px-0 py-0 text-xs font-bold shadow-none;
 }
 
-.glass-card {
-  @apply bg-white border border-slate-200 rounded-lg transition-shadow;
+.status-dot::before,
+.badge-available::before,
+.badge-busy::before,
+.badge-maintenance::before,
+.badge-offline::before,
+.badge-pending::before,
+.badge-completed::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: currentColor;
+  flex-shrink: 0;
 }
 
-.glass-card:hover {
-  @apply border-brand-200 shadow-md;
-}
-
-/* Operational Status Badges — light theme */
 .badge-available {
-  @apply bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 rounded-full text-xs font-semibold inline-flex items-center gap-1.5;
+  color: #0b7a5a;
 }
 
 .badge-busy {
-  @apply bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-0.5 rounded-full text-xs font-semibold inline-flex items-center gap-1.5;
+  color: #2d6cdf;
 }
 
-.badge-maintenance {
-  @apply bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-0.5 rounded-full text-xs font-semibold inline-flex items-center gap-1.5;
-}
-
-.badge-offline {
-  @apply bg-slate-100 text-slate-600 border border-slate-200 px-2.5 py-0.5 rounded-full text-xs font-semibold inline-flex items-center gap-1.5;
-}
-
+.badge-maintenance,
 .badge-pending {
-  @apply bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-0.5 rounded-full text-xs font-semibold inline-flex items-center gap-1.5;
+  color: #b87400;
 }
 
+.badge-offline,
 .badge-completed {
-  @apply bg-teal-50 text-teal-700 border border-teal-200 px-2.5 py-0.5 rounded-full text-xs font-semibold inline-flex items-center gap-1.5;
+  color: #66766e;
+}
+
+.status-danger {
+  color: #d64545;
+}
+
+.status-ext {
+  color: #6d5bd0;
+}
+
+.status-live-text {
+  color: #b87400;
+}
+
+.portal-stat-strip {
+  @apply flex overflow-x-auto mb-[26px] border-y border-line;
+  -webkit-overflow-scrolling: touch;
+}
+
+.portal-stat-cell-active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: #0b7a5a;
+}
+
+.portal-toast {
+  @apply fixed top-5 left-1/2 -translate-x-1/2 z-[10002] bg-ink text-white text-sm font-bold px-5 py-3 rounded-full;
+  animation: portal-toast-in 250ms ease-out;
+}
+
+@keyframes portal-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 14px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
 
 @keyframes skeleton-shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .skeleton-shimmer {
-  background: linear-gradient(90deg, #e2e8f0 0%, #f1f5f9 40%, #e2e8f0 80%);
+  background: linear-gradient(90deg, #e6ebe8 0%, #f1f4f2 40%, #e6ebe8 80%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.4s ease-in-out infinite;
 }
 
 @keyframes pulse-dot {
-  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.35); }
-  70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(37, 99, 235, 0); }
-  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(245, 165, 36, 0.45);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 8px rgba(245, 165, 36, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(245, 165, 36, 0);
+  }
 }
 
 .live-pulse {
-  animation: pulse-dot 2s infinite;
+  animation: pulse-dot 1.6s infinite;
 }
 
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: #f1f5f9;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 9999px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
-
-/* Map legacy dark utility classes inside portal views */
-.app-portal thead {
-  @apply bg-slate-50 text-slate-600;
-}
-
-.app-portal .divide-slate-800\/60 > :not([hidden]) ~ :not([hidden]) {
-  border-color: rgb(226 232 240);
-}
-
-.app-portal h1,
-.app-portal h2,
-.app-portal h3,
-.app-portal h4,
-.app-portal h5,
-.app-portal strong {
-  @apply text-slate-900;
-}
-
-.app-portal input,
-.app-portal select,
-.app-portal textarea {
-  @apply bg-white border-slate-300 text-slate-900;
-}
-
-/* —— Mobile-first portal (lg+ keeps desktop sidebar layout) —— */
 .portal-main {
-  @apply px-4 py-4 pb-28 lg:px-8 lg:py-6 lg:pb-6;
+  @apply px-5 py-5 pb-28 lg:px-9 lg:py-7 lg:pb-7 max-w-portal mx-auto w-full;
 }
 
-@keyframes mobile-sheet-up {
-  from {
-    transform: translateY(100%);
-    opacity: 0.6;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-.mobile-sheet-enter {
-  animation: mobile-sheet-up 0.24s ease-out;
+.portal-page {
+  @apply space-y-6 w-full;
 }
 
 @media (max-width: 1023px) {
   .app-portal .portal-table-scroll {
-    @apply -mx-4 px-4;
+    @apply -mx-5 px-5;
     overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
   }
 
   .app-portal .portal-table-scroll table {
     min-width: 640px;
   }
 
-  .app-portal .portal-stat-row {
-    @apply grid grid-cols-2 gap-3;
-  }
-
-  .app-portal .portal-map-panel {
-    min-height: 52vh;
-    max-height: 62vh;
-  }
-
   .app-portal .portal-dispatch-inbox {
     max-height: min(58vh, 520px);
-  }
-}
-
-@media (min-width: 1024px) {
-  .app-portal .portal-dispatch-inbox {
-    max-height: 750px;
-  }
-
-  .field-control {
-    min-height: 0;
-    font-size: 0.875rem;
-    padding: 0.625rem 0.75rem;
-  }
-}
-
-/* Page rhythm */
-.portal-page {
-  @apply space-y-5 sm:space-y-6 max-w-[1600px] mx-auto w-full;
-}
-
-/* Mobile-first form controls (portal + login) */
-.field-control {
-  min-height: 48px;
-  font-size: 1rem;
-  padding: 0.75rem 0.875rem;
-  border-radius: 0.75rem;
-}
-
-.login-shell .field-control {
-  @apply min-h-[48px] text-base;
-}
-
-.login-shell button[type='submit'] {
-  @apply min-h-[48px] text-base;
-}
-
-@media (max-width: 1023px) {
-  .app-portal button:not(.no-touch-target),
-  .app-portal .portal-btn {
-    min-height: 44px;
   }
 
   .app-portal .portal-modal-backdrop,
@@ -236,38 +247,87 @@
     @apply p-0 items-end;
   }
 
-  .app-portal .portal-modal-panel,
-  .login-shell .portal-modal-panel {
-    @apply w-full max-w-none rounded-t-2xl rounded-b-none;
-    max-height: min(92vh, 100dvh);
-    margin-bottom: env(safe-area-inset-bottom);
-  }
-
-  /* Legacy modals without PortalModal — bottom sheet on phone */
-  .app-portal .fixed.inset-0.z-50.flex.items-center.justify-center {
-    align-items: flex-end !important;
-    padding: 0 !important;
-  }
-
-  .app-portal .fixed.inset-0.z-50.flex.items-center.justify-center > .glass-panel,
-  .app-portal .fixed.inset-0.z-50.flex.items-center.justify-center > form.glass-panel,
-  .app-portal .fixed.inset-0.z-50.flex.items-center.justify-center > .portal-modal-panel {
-    width: 100% !important;
-    max-width: 100% !important;
-    border-radius: 1rem 1rem 0 0 !important;
-    max-height: min(92vh, 100dvh);
-    overflow-y: auto;
-    margin-bottom: env(safe-area-inset-bottom);
-  }
-
   .portal-data-cards {
-    @apply divide-y divide-slate-100;
+    @apply divide-y divide-line;
   }
-
 }
 
 @media (min-width: 1024px) {
   .portal-mobile-only {
     display: none !important;
   }
+
+  .app-portal .portal-dispatch-inbox {
+    max-height: calc(100vh - 340px);
+  }
+
+  .portal-dispatch-split {
+    display: grid;
+    grid-template-columns: 5fr 7fr;
+    gap: 0;
+  }
+
+  .portal-dispatch-inbox-col {
+    padding-right: 26px;
+    border-right: 1px solid #e6ebe8;
+  }
+
+  .portal-dispatch-inspector-col {
+    padding-left: 30px;
+    min-width: 0;
+  }
+}
+
+.login-shell {
+  @apply bg-page;
+}
+
+.login-auth-sheet {
+  @apply bg-white border border-line rounded-[20px] p-7;
+}
+
+.sidebar-nav-active-bar {
+  box-shadow: inset 3px 0 0 0 #0b7a5a;
+}
+
+.notification-banner {
+  background: rgba(245, 165, 36, 0.14);
+  color: #b87400;
+  border-bottom: 1px solid rgba(245, 165, 36, 0.4);
+}
+
+.notification-banner button {
+  color: #8a5600;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.dispatch-inbox-row {
+  @apply w-full text-left px-3 py-3.5 border-b border-line transition-colors duration-150;
+}
+
+.dispatch-inbox-row:hover {
+  background: #fafcfb;
+}
+
+.dispatch-inbox-row-selected {
+  background: #e4f3ec;
+  box-shadow: inset 3px 0 0 0 #0b7a5a;
+}
+
+.inspector-section {
+  @apply pb-6 mb-6 border-b border-line last:border-b-0 last:mb-0 last:pb-0;
+}
+
+.personal-notice-bar {
+  border-left: 3px solid #6d5bd0;
+  @apply pl-3 text-[13px] font-semibold text-ext;
+}
+
+.map-legend-line {
+  @apply flex flex-wrap items-center gap-2 text-[13px] text-mute font-medium py-2;
+}
+
+.app-portal tbody tr:hover td {
+  background: #fafcfb;
 }
