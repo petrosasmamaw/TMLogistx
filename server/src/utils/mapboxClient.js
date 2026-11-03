@@ -32,6 +32,17 @@ export async function mapboxDrivingRoute(fromLat, fromLng, toLat, toLng) {
   };
 }
 
+/** Leaflet-ready driving path (lat,lng pairs). */
+export async function mapboxDrivingRouteLeaflet(fromLat, fromLng, toLat, toLng) {
+  const routed = await mapboxDrivingRoute(fromLat, fromLng, toLat, toLng);
+  if (!routed?.geometry?.coordinates?.length) return null;
+  return {
+    coordinates: routed.geometry.coordinates.map(([lng, lat]) => [lat, lng]),
+    distanceKm: String(routed.distanceKm),
+    timeMins: routed.durationMins,
+  };
+}
+
 export async function mapboxGeocodeSearch(addressText) {
   const t = token();
   if (!t || !addressText?.trim()) return null;

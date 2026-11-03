@@ -1,3 +1,4 @@
+import { applyMapRuntimeConfig } from './mapboxSession.js';
 
 const CACHE_KEY = 'tmlogistx_map_runtime_v1';
 const CACHE_MS = 60 * 60 * 1000;
@@ -25,12 +26,16 @@ function writeCache(data) {
 /** Mapbox public token + style from API (Render has MAPBOX_ACCESS_TOKEN). */
 export async function loadMapRuntimeConfig() {
   const cached = readCache();
-  if (cached) return cached;
+  if (cached) {
+    applyMapRuntimeConfig(cached);
+    return cached;
+  }
 
   const envToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN || '';
   const envStyle = import.meta.env.VITE_MAPBOX_STYLE || 'mapbox/streets-v12';
   if (envToken.startsWith('pk.')) {
     const data = { mapboxPublicToken: envToken, mapboxStyle: envStyle };
+    applyMapRuntimeConfig(data);
     writeCache(data);
     return data;
   }
@@ -42,6 +47,7 @@ export async function loadMapRuntimeConfig() {
       const json = await res.json();
       const data = json.data || {};
       if (data.mapboxPublicToken?.startsWith('pk.')) {
+        applyMapRuntimeConfig(data);
         writeCache(data);
         return data;
       }

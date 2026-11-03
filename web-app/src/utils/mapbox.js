@@ -1,54 +1,91 @@
 /**
- * Mapbox Maps API helpers (Geocoding v5 + Directions v5 + raster tiles for Leaflet).
- * @see https://docs.mapbox.com/api/
+ * Mapbox helpers — matches mobile-app/src/utils/mapbox.js tile + route behavior.
  */
-
-const ENV_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN || '';
-const ENV_STYLE = import.meta.env.VITE_MAPBOX_STYLE || 'mapbox/streets-v12';
+import { apiRequest } from '../api/client.js';
+import { getEffectiveMapboxStyle, getEffectiveMapboxToken } from './mapboxSession.js';
 
 export function getMapboxAccessToken() {
-  return ENV_TOKEN;
+  return getEffectiveMapboxToken();
 }
 
 export function getMapboxStyleId() {
-  return ENV_STYLE;
+  return getEffectiveMapboxStyle();
 }
 
-/**
- * High-quality Mapbox raster tiles tuned for slower connections (256px, fewer buffers).
- */
-export function buildMapboxLeafletTileConfig(token, style = ENV_STYLE) {
+/** Same Leaflet layer as mobile TripLiveMap (512 @2x, streets-v12). */
+export function buildMapboxLeafletTileConfig(token, style = getEffectiveMapboxStyle()) {
   if (!token?.startsWith('pk.')) return null;
   return {
-    url: `https://api.mapbox.com/styles/v1/${style}/tiles/256/{z}/{x}/{y}?access_token=${token}`,
-    attribution:
-      '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    tileSize: 256,
+    url: `https://api.mapbox.com/styles/v1/${style}/tiles/512/{z}/{x}/{y}@2x?access_token=${token}`,
+    attribution: '© Mapbox © OpenStreetMap',
+    tileSize: 512,
+    zoomOffset: -1,
     minZoom: 0,
-    maxZoom: 18,
-    maxNativeZoom: 19,
-    keepBuffer: 2,
+    maxZoom: 22,
+    maxNativeZoom: 22,
+    keepBuffer: 6,
     updateWhenIdle: true,
     updateWhenZooming: false,
   };
 }
 
-/** Leaflet TileLayer props when VITE token is set at build time. */
 export function getMapboxLeafletTileConfig() {
-  return buildMapboxLeafletTileConfig(ENV_TOKEN, ENV_STYLE);
+  return buildMapboxLeafletTileConfig(getEffectiveMapboxToken(), getEffectiveMapboxStyle());
 }
 
-function authQuery(token = ENV_TOKEN) {
+function authQuery(token) {
   return `access_token=${encodeURIComponent(token)}`;
 }
 
+async function fetchRouteViaServer(lat1, lon1, lat2, lon2) {
+  try {
+    const q = new URLSearchParams({
+      from_lat: String(lat1),
+      from_lng: String(lon1),
+      to_lat: String(lat2),
+      to_lng: String(lon2),
+    });
+    const res = await apiRequest(`/geo/driving-route?${q.toString()}`);
+    return res.data || null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchRouteViaMapbox(lat1, lon1, lat2, lon2, token) {
+  const path = `${lon1},${lat1};${lon2},${lat2}`;
+  const url =
+    `https://api.mapbox.com/directions/v5/mapbox/driving/${path}?` +
+    `${authQuery(token)}&geometries=geojson&overview=full&alternatives=false`;
+  const res = await fetch(url);
+  if (!res.ok) return null;
+  const data = await res.json();
+  const route = data.routes?.[0];
+  if (!route?.geometry?.coordinates?.length) return null;
+  return {
+    coordinates: route.geometry.coordinates.map(([lng, lat]) => [lat, lng]),
+    distanceKm: (route.distance / 1000).toFixed(1),
+    timeMins: Math.max(1, Math.round(route.duration / 60)),
+  };
+}
+
+export async function mapboxDrivingRoute(lat1, lon1, lat2, lon2) {
+  if ([lat1, lon1, lat2, lon2].some((v) => v == null)) return null;
+  const token = getEffectiveMapboxToken();
+  if (token) {
+    const direct = await fetchRouteViaMapbox(lat1, lon1, lat2, lon2, token);
+    if (direct) return direct;
+  }
+  return fetchRouteViaServer(lat1, lon1, lat2, lon2);
+}
+
 export async function mapboxForwardGeocode(query, { limit = 8, types = 'place,locality,region' } = {}) {
-  const token = ENV_TOKEN;
+  const token = getEffectiveMapboxToken();
   if (!token || !query?.trim()) return [];
   const q = encodeURIComponent(query.trim());
   const url =
     `https://api.mapbox.com/geocoding/v5/mapbox.places/${q}.json?` +
-    `${authQuery()}&autocomplete=true&limit=${limit}&types=${encodeURIComponent(types)}`;
+    `${authQuery(token)}&autocomplete=true&limit=${limit}&types=${encodeURIComponent(types)}`;
   const res = await fetch(url);
   if (!res.ok) return [];
   const data = await res.json();
@@ -56,38 +93,18 @@ export async function mapboxForwardGeocode(query, { limit = 8, types = 'place,lo
     id: f.id,
     lat: f.center[1],
     lon: f.center[0],
-    label: f.place_name
+    label: f.place_name,
   }));
 }
 
 export async function mapboxReverseGeocode(lat, lng) {
-  if (!ENV_TOKEN) return null;
+  const token = getEffectiveMapboxToken();
+  if (!token) return null;
   const url =
     `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?` +
-    `${authQuery()}&limit=1`;
+    `${authQuery(token)}&limit=1`;
   const res = await fetch(url);
   if (!res.ok) return null;
   const data = await res.json();
-  const f = data.features?.[0];
-  return f?.place_name || null;
-}
-
-/** @returns {{ coordinates: [lat,lng][], distanceKm: string, timeMins: number } | null} */
-export async function mapboxDrivingRoute(lat1, lon1, lat2, lon2) {
-  if (!ENV_TOKEN) return null;
-  const path = `${lon1},${lat1};${lon2},${lat2}`;
-  const url =
-    `https://api.mapbox.com/directions/v5/mapbox/driving/${path}?` +
-    `${authQuery()}&geometries=geojson&overview=full`;
-  const res = await fetch(url);
-  if (!res.ok) return null;
-  const data = await res.json();
-  const route = data.routes?.[0];
-  if (!route?.geometry?.coordinates?.length) return null;
-  const coordinates = route.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
-  return {
-    coordinates,
-    distanceKm: (route.distance / 1000).toFixed(1),
-    timeMins: Math.round(route.duration / 60)
-  };
+  return data.features?.[0]?.place_name || null;
 }

@@ -352,6 +352,7 @@ export default function MovementView() {
             drivers={liveDrivers}
             defaultMapView={projectMapView}
             mapShellClassName="fleet-map-root--live"
+            fitMode="fleet"
             showCitySearch
           />
         )}
@@ -668,6 +669,7 @@ export default function MovementView() {
                 highlightDriverId={selectedRequest?.assignment?.driver?.id}
                 highlightVehicleId={selectedRequest?.assignment?.vehicle?.id}
                 defaultMapView={projectMapView}
+                fitMode="trip"
                 height="320px"
                 showCitySearch={false}
               />
