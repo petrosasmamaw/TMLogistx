@@ -5,9 +5,11 @@ import { Loader2, MapPin, Search } from 'lucide-react';
 import {
   getMapboxAccessToken,
   getMapboxLeafletTileConfig,
+  buildMapboxLeafletTileConfig,
   mapboxDrivingRoute,
   mapboxForwardGeocode
 } from '../utils/mapbox.js';
+import { loadMapRuntimeConfig } from '../utils/mapRuntime.js';
 import {
   CITY_MAP_ZOOM,
   FALLBACK_MAP_CENTER,
@@ -343,6 +345,22 @@ function FleetMapInner({
   const [cityZoom, setCityZoom] = useState(initialZoom);
   const [cityLabel, setCityLabel] = useState(initialLabel);
   const [viewAnimate, setViewAnimate] = useState(false);
+  const [mapboxTiles, setMapboxTiles] = useState(() => getMapboxLeafletTileConfig());
+
+  useEffect(() => {
+    let cancelled = false;
+    loadMapRuntimeConfig().then((cfg) => {
+      if (cancelled) return;
+      const built = buildMapboxLeafletTileConfig(
+        cfg?.mapboxPublicToken,
+        cfg?.mapboxStyle
+      );
+      if (built) setMapboxTiles(built);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const el = rootRef.current;
@@ -362,7 +380,7 @@ function FleetMapInner({
     setCityCenter(normalizeCenter(defaultMapView.center));
     setCityZoom(clampMapZoom(defaultMapView.zoom ?? CITY_ZOOM));
     setCityLabel(defaultMapView.label || DEFAULT_CITY_LABEL);
-    setViewAnimate(true);
+    setViewAnimate(defaultMapView.source === 'geocoded');
   }, [
     defaultMapView?.center?.[0],
     defaultMapView?.center?.[1],
@@ -434,7 +452,9 @@ function FleetMapInner({
     .filter((d) => isValidLatLng(d.latitude, d.longitude))
     .map((d) => ({
       ...d,
-      distance_km: distanceKm(refLat, refLng, d.latitude, d.longitude)
+      distance_km: d.is_approximate
+        ? null
+        : distanceKm(refLat, refLng, d.latitude, d.longitude),
     }))
     .sort((a, b) => (a.distance_km ?? 999) - (b.distance_km ?? 999))
     .slice(0, 6);
@@ -443,7 +463,6 @@ function FleetMapInner({
     rankedDrivers.map((d) => [d.id, d.distance_km])
   );
 
-  const mapboxTiles = getMapboxLeafletTileConfig();
   const osmTiles = getOsmLeafletTileOptions();
 
   const rootClass = ['fleet-map-root relative rounded-2xl overflow-hidden border border-slate-200 shadow-2xl', mapShellClassName]
@@ -473,20 +492,28 @@ function FleetMapInner({
         <ChangeView center={mapCenter} zoom={mapZoom} animate={viewAnimate || !!pickupCoords} />
         {mapboxTiles ? (
           <TileLayer
+            key="mapbox"
             url={mapboxTiles.url}
             attribution={mapboxTiles.attribution}
             tileSize={mapboxTiles.tileSize}
-            zoomOffset={mapboxTiles.zoomOffset}
             minZoom={mapboxTiles.minZoom}
             maxZoom={mapboxTiles.maxZoom}
             maxNativeZoom={mapboxTiles.maxNativeZoom}
+            keepBuffer={mapboxTiles.keepBuffer}
+            updateWhenIdle={mapboxTiles.updateWhenIdle}
+            updateWhenZooming={mapboxTiles.updateWhenZooming}
           />
         ) : (
           <TileLayer
+            key="osm"
             url={osmTiles.url}
             attribution={osmTiles.attribution}
             maxZoom={osmTiles.maxZoom}
+            minZoom={osmTiles.minZoom}
             subdomains={osmTiles.subdomains}
+            keepBuffer={osmTiles.keepBuffer}
+            updateWhenIdle={osmTiles.updateWhenIdle}
+            updateWhenZooming={osmTiles.updateWhenZooming}
           />
         )}
 
@@ -543,11 +570,15 @@ function FleetMapInner({
                   {d.vehicle_plate && (
                     <div className="text-slate-600 mt-0.5">Vehicle: {d.vehicle_plate}</div>
                   )}
-                  {driverDistanceById[d.id] != null && (
+                  {driverDistanceById[d.id] != null ? (
                     <div className="text-violet-800 font-semibold mt-1">
                       {driverDistanceById[d.id]} km from pickup
                     </div>
-                  )}
+                  ) : d.is_approximate ? (
+                    <div className="text-amber-800 font-medium mt-1 text-[10px]">
+                      Distance hidden until live GPS
+                    </div>
+                  ) : null}
                   <div className="text-[10px] text-slate-500 mt-1">{d.availability_status || 'AVAILABLE'}</div>
                   {d.is_approximate && (
                     <div className="mt-1 text-amber-800 font-medium bg-amber-50 p-1 rounded text-[10px]">
@@ -624,7 +655,11 @@ function FleetMapInner({
                 <div className="text-slate-500 flex justify-between gap-2">
                   <span className="truncate">{d.vehicle_plate || 'No plate'}</span>
                   <span className="font-mono text-violet-700 shrink-0">
-                    {d.distance_km != null ? `${d.distance_km} km` : '—'}
+                    {d.is_approximate
+                      ? 'GPS pending'
+                      : d.distance_km != null
+                        ? `${d.distance_km} km`
+                        : '—'}
                   </span>
                 </div>
               </li>

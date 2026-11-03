@@ -8,7 +8,11 @@ export function getOsmLeafletTileOptions() {
   return {
     url: OSM_TILE_URL,
     attribution: OSM_TILE_ATTRIBUTION,
-    maxZoom: 19,
+    maxZoom: 18,
+    minZoom: 2,
     subdomains: 'abc',
+    keepBuffer: 2,
+    updateWhenIdle: true,
+    updateWhenZooming: false,
   };
 }

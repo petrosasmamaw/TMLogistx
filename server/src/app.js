@@ -23,6 +23,7 @@ import fuelRoutes from './routes/fuelRoutes.js';
 import policyRoutes from './routes/policyRoutes.js';
 import personalFuelRoutes from './routes/personalFuelRoutes.js';
 import siteRoutes from './routes/siteRoutes.js';
+import geoRoutes from './routes/geoRoutes.js';
 import db from './db/connection.js';
 import { buildExpressCorsOptions } from './utils/corsOptions.js';
 
@@ -107,6 +108,7 @@ app.use('/api/fuel', fuelRoutes);
 app.use('/api/policies', policyRoutes);
 app.use('/api/personal-fuel', personalFuelRoutes);
 app.use('/api/sites', siteRoutes);
+app.use('/api/geo', geoRoutes);
 
 // 404 & Centralized Error Handlers
 app.use(notFoundHandler);

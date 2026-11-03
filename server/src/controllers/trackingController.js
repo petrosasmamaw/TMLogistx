@@ -7,6 +7,7 @@ import {
 import { logAudit } from '../middleware/audit.js';
 import { config } from '../config/index.js';
 import { calculateEta, calculateDistanceKm } from '../utils/geo.js';
+import { resolveProjectCityCenterSync } from '../utils/projectMapFocus.js';
 import { resolveDriverVehicleForIncident } from '../utils/driverVehicleResolve.js';
 import { emitToProject, emitToTrip } from '../socket.js';
 
@@ -330,12 +331,16 @@ export async function getLiveFleet(req, res, next) {
 
         let is_approximate = false;
         if (latitude == null || longitude == null) {
+          const anchor = resolveProjectCityCenterSync(
+            store.projects.find((p) => p.id === drv.project_id),
+            store
+          );
           const hash = String(drv.id)
             .split('')
             .reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-          const slot = (hash % 12) * 0.003;
-          latitude = 9.02 + slot;
-          longitude = 38.75 + slot * 0.85;
+          const slot = (hash % 10) * 0.0035;
+          latitude = anchor.lat + slot;
+          longitude = anchor.lng + slot * 0.65;
           is_approximate = true;
           position_source = 'project_default';
         }
