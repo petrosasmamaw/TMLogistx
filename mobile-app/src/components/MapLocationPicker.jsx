@@ -14,6 +14,7 @@ import { WebView } from 'react-native-webview';
 import { colors } from '../theme/colors';
 import { buildLeafletPickerHtml } from '../utils/leafletMapHtml';
 import { getMapboxAccessToken, getMapboxLeafletTileOptions, getMapboxStyleId } from '../utils/mapbox';
+import { getOsmLeafletTileOptions } from '../utils/mapTiles';
 import { MapSkeleton } from './Skeleton';
 import AppText from './ui/AppText';
 import { radius, spacing } from '../theme/layout';
@@ -113,10 +114,10 @@ export default function MapLocationPicker({
             maxZoom: mb.maxZoom,
           }).addTo(map);
         } else {
-          L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            subdomains: 'abcd',
-            maxZoom: 19,
-            attribution: '© OpenStreetMap · CARTO',
+          const osm = getOsmLeafletTileOptions();
+          L.tileLayer(osm.url, {
+            maxZoom: osm.maxZoom,
+            attribution: osm.attribution,
           }).addTo(map);
         }
 

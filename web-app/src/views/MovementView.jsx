@@ -351,7 +351,7 @@ export default function MovementView() {
             vehicles={liveFleet}
             drivers={liveDrivers}
             defaultMapView={projectMapView}
-            height="min(58vh, 640px)"
+            mapShellClassName="fleet-map-root--live"
             showCitySearch
           />
         )}

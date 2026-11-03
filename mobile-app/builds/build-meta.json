@@ -1,0 +1,47 @@
+{
+  "id": "c6eecf94-98f4-46b8-8cc6-78f38b8de2f8",
+  "status": "FINISHED",
+  "platform": "ANDROID",
+  "artifacts": {
+    "buildUrl": "https://expo.dev/artifacts/eas/aDD-REb0Iw1_Fc1vg5hXEWsupbwswDgUyW9ntIX07pY.apk",
+    "applicationArchiveUrl": "https://expo.dev/artifacts/eas/aDD-REb0Iw1_Fc1vg5hXEWsupbwswDgUyW9ntIX07pY.apk"
+  },
+  "fingerprint": {
+    "id": "01a1a096-398c-780f-a080-d52196ec8a32",
+    "hash": "0e54c2c92344e21e0cac06a19dca107b289db9c9"
+  },
+  "initiatingActor": {
+    "id": "e1fd7029-0557-4d0b-921a-f4b62995e074",
+    "displayName": "petrosasmamaw2"
+  },
+  "logFiles": [
+    "https://storage.googleapis.com/eas-workflows-production/logs/d7c0a601-e990-447d-9f53-03bfe2e0c62f/c6eecf94-98f4-46b8-8cc6-78f38b8de2f8/2026-11-03T08%3A46%3A08Z-7244c0cb-e33f-4401-bb25-a583a30c0efd.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20261103%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20261103T084843Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=3674f50b963203863cf93d19ae0dc3e7af7ee972ddeea37c7c0e7156b2bca7f6a2c410317cd03dcae67801567c9bc557e07e8af79be7aab125d71689e923a4d760727827ad829956be122ccacf9d65c10807eac76f758c619215d794edde3287890daa8a6c9bc29e75bb2cf6387e59b26b1130c42cab154408208d46900a310a39a2742faf8308224496be167301609b6721f6f7edc2c200c1b8c706525bd459ad3442e003e33d36c6d1ecf89d32ba845f152dbb585bddb64408b6712b2b66f07823e1b3e0366d99b254ed39e802f9603960162b2016db2c3390655b438aa0559dcaf1c41ff6daab680a7741ec4a0c82d97b6a068bcb91b9c9de30220295e9ed"
+  ],
+  "project": {
+    "id": "d7c0a601-e990-447d-9f53-03bfe2e0c62f",
+    "name": "tmlogistx-mobile",
+    "slug": "tmlogistx-mobile",
+    "ownerAccount": {
+      "id": "3a9a1cd4-32f8-4463-b02e-6e809dc0be28",
+      "name": "petrosasmamaw2"
+    }
+  },
+  "distribution": "INTERNAL",
+  "buildProfile": "preview",
+  "sdkVersion": "57.0.0",
+  "appVersion": "1.0.4",
+  "appBuildVersion": "5",
+  "gitCommitHash": "b7e38e75c1dec83d5c636c5875d560785cd92c2e",
+  "gitCommitMessage": "Refactor mobile app components and enhance functionality.\n\n- Updated App.js to integrate new font loading and improved session handling.\n- Enhanced MainApp component to manage location and notification permissions more effectively.\n- Refactored DriverLocationBroadcaster to utilize new location options and improve performance.\n- Improved Header component layout and user profile handling.\n- Updated DriverTripDistancePanel to streamline distance tracking and reporting.\n- Added error handling and loading states in various components for better user experience.\n- Adjusted styles across components for consistency and improved visual appeal.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+  "priority": "NORMAL",
+  "createdAt": "2026-11-03T08:46:02.057Z",
+  "updatedAt": "2026-11-03T08:53:07.107Z",
+  "completedAt": "2026-11-03T08:53:06.922Z",
+  "expirationDate": "2026-11-17T08:46:02.112Z",
+  "isForIosSimulator": false,
+  "metrics": {
+    "buildWaitTime": 3248,
+    "buildQueueTime": 7107,
+    "buildDuration": 414510
+  }
+}

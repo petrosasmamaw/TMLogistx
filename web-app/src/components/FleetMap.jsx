@@ -20,6 +20,23 @@ import {
 
 const MAPBOX_TOKEN = getMapboxAccessToken();
 
+function isValidLatLng(lat, lng) {
+  const a = Number(lat);
+  const b = Number(lng);
+  return Number.isFinite(a) && Number.isFinite(b) && a >= -90 && a <= 90 && b >= -180 && b <= 180;
+}
+
+function normalizeCenter(center, fallback = FALLBACK_MAP_CENTER) {
+  if (!center || center.length < 2) return fallback;
+  return isValidLatLng(center[0], center[1]) ? [Number(center[0]), Number(center[1])] : fallback;
+}
+
+function clampMapZoom(z) {
+  const n = Number(z);
+  if (!Number.isFinite(n)) return CITY_MAP_ZOOM;
+  return Math.min(18, Math.max(2, Math.round(n)));
+}
+
 const DEFAULT_CENTER = FALLBACK_MAP_CENTER;
 const DEFAULT_CITY_LABEL = FALLBACK_MAP_LABEL;
 const CITY_ZOOM = CITY_MAP_ZOOM;
@@ -94,20 +111,89 @@ function createDriverIcon(status = 'AVAILABLE', highlighted = false) {
   });
 }
 
+function MapInvalidateSize() {
+  const map = useMap();
+  useEffect(() => {
+    const run = () => {
+      try {
+        map.invalidateSize({ animate: false, pan: false });
+      } catch {
+        /* ignore resize during teardown */
+      }
+    };
+    run();
+    const t1 = window.setTimeout(run, 100);
+    const t2 = window.setTimeout(run, 350);
+    const onWinResize = () => requestAnimationFrame(run);
+    window.addEventListener('resize', onWinResize);
+    const root = map.getContainer()?.closest('.fleet-map-root');
+    let ro;
+    if (root && typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => requestAnimationFrame(run));
+      ro.observe(root);
+    }
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      window.removeEventListener('resize', onWinResize);
+      ro?.disconnect();
+    };
+  }, [map]);
+  return null;
+}
+
 // Center updater helper
 function ChangeView({ center, zoom, animate = true }) {
   const map = useMap();
   useEffect(() => {
-    if (center && center[0] && center[1]) {
-      const z = zoom || 13;
-      if (animate) {
-        map.flyTo(center, z, { duration: 1.2 });
-      } else {
-        map.setView(center, z);
-      }
+    if (!isValidLatLng(center?.[0], center?.[1])) return;
+    const c = [Number(center[0]), Number(center[1])];
+    const z = clampMapZoom(zoom);
+    if (animate) {
+      map.flyTo(c, z, { duration: 1.2 });
+    } else {
+      map.setView(c, z);
     }
-  }, [center, zoom, map, animate]);
+  }, [center?.[0], center?.[1], zoom, map, animate]);
   return null;
+}
+
+class FleetMapErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div
+          className="fleet-map-root relative rounded-2xl overflow-hidden border border-slate-200 shadow-2xl flex items-center justify-center bg-slate-100"
+          style={{ height: this.props.height, minHeight: 280 }}
+        >
+          <div className="p-6 text-center text-sm text-slate-600 max-w-md">
+            <p className="font-semibold text-slate-900">Map could not load</p>
+            <p className="mt-2 text-xs leading-relaxed">
+              This is usually a temporary Leaflet layout glitch (often after opening browser dev tools).
+              Refresh the page or click below to try again.
+            </p>
+            <button
+              type="button"
+              className="portal-link mt-4 inline-block"
+              onClick={() => this.setState({ error: null })}
+            >
+              Retry map
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 function MapCitySearch({ onSelectCity, currentLabel }) {
@@ -232,7 +318,7 @@ function MapCitySearch({ onSelectCity, currentLabel }) {
   );
 }
 
-export default function FleetMap({
+function FleetMapInner({
   vehicles = [],
   drivers = [],
   selectedRequest = null,
@@ -243,11 +329,14 @@ export default function FleetMap({
   defaultMapView = null,
   height = '460px',
   showCitySearch = true,
+  mapShellClassName = '',
 }) {
+  const rootRef = useRef(null);
+  const [mapReady, setMapReady] = useState(false);
   const [routeCoordinates, setRouteCoordinates] = useState(null);
   const [routeInfo, setRouteInfo] = useState(null);
-  const initialCenter = defaultMapView?.center || center;
-  const initialZoom = defaultMapView?.zoom ?? zoom;
+  const initialCenter = normalizeCenter(defaultMapView?.center || center);
+  const initialZoom = clampMapZoom(defaultMapView?.zoom ?? zoom);
   const initialLabel = defaultMapView?.label || DEFAULT_CITY_LABEL;
   const [cityCenter, setCityCenter] = useState(initialCenter);
   const [cityZoom, setCityZoom] = useState(initialZoom);
@@ -255,9 +344,22 @@ export default function FleetMap({
   const [viewAnimate, setViewAnimate] = useState(false);
 
   useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return undefined;
+    const measure = () => {
+      const { width, height: h } = el.getBoundingClientRect();
+      setMapReady(width > 48 && h > 48);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
     if (!defaultMapView?.center) return;
-    setCityCenter(defaultMapView.center);
-    setCityZoom(defaultMapView.zoom ?? CITY_ZOOM);
+    setCityCenter(normalizeCenter(defaultMapView.center));
+    setCityZoom(clampMapZoom(defaultMapView.zoom ?? CITY_ZOOM));
     setCityLabel(defaultMapView.label || DEFAULT_CITY_LABEL);
     setViewAnimate(true);
   }, [
@@ -276,12 +378,16 @@ export default function FleetMap({
   }, []);
 
   const pickupCoords =
-    selectedRequest && shouldShowMovementCenterPickupPin(selectedRequest) && selectedRequest.pickup_lat
-      ? [selectedRequest.pickup_lat, selectedRequest.pickup_lng]
+    selectedRequest &&
+    shouldShowMovementCenterPickupPin(selectedRequest) &&
+    isValidLatLng(selectedRequest.pickup_lat, selectedRequest.pickup_lng)
+      ? [Number(selectedRequest.pickup_lat), Number(selectedRequest.pickup_lng)]
       : null;
   const destCoords =
-    selectedRequest && shouldShowMovementCenterDestPin(selectedRequest) && selectedRequest.destination_lat
-      ? [selectedRequest.destination_lat, selectedRequest.destination_lng]
+    selectedRequest &&
+    shouldShowMovementCenterDestPin(selectedRequest) &&
+    isValidLatLng(selectedRequest.destination_lat, selectedRequest.destination_lng)
+      ? [Number(selectedRequest.destination_lat), Number(selectedRequest.destination_lng)]
       : null;
 
   useEffect(() => {
@@ -312,19 +418,19 @@ export default function FleetMap({
     highlightVehicleId && vehicles.find((v) => v.id === highlightVehicleId);
 
   const focusCoords =
-    assignedDriver?.latitude != null
-      ? [assignedDriver.latitude, assignedDriver.longitude]
-      : assignedVehicle?.latitude != null
-        ? [assignedVehicle.latitude, assignedVehicle.longitude]
+    assignedDriver?.latitude != null && isValidLatLng(assignedDriver.latitude, assignedDriver.longitude)
+      ? [Number(assignedDriver.latitude), Number(assignedDriver.longitude)]
+      : assignedVehicle?.latitude != null && isValidLatLng(assignedVehicle.latitude, assignedVehicle.longitude)
+        ? [Number(assignedVehicle.latitude), Number(assignedVehicle.longitude)]
         : null;
 
-  const mapCenter = focusCoords || pickupCoords || cityCenter || center;
-  const mapZoom = focusCoords || pickupCoords ? 14 : cityZoom;
+  const mapCenter = normalizeCenter(focusCoords || pickupCoords || cityCenter || center);
+  const mapZoom = clampMapZoom(focusCoords || pickupCoords ? 14 : cityZoom);
 
   const refLat = pickupCoords?.[0] ?? mapCenter[0];
   const refLng = pickupCoords?.[1] ?? mapCenter[1];
   const rankedDrivers = [...(drivers || [])]
-    .filter((d) => d.latitude != null && d.longitude != null)
+    .filter((d) => isValidLatLng(d.latitude, d.longitude))
     .map((d) => ({
       ...d,
       distance_km: distanceKm(refLat, refLng, d.latitude, d.longitude)
@@ -339,33 +445,52 @@ export default function FleetMap({
   const mapboxTiles = getMapboxLeafletTileConfig();
   const fallbackTileUrl = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
 
+  const rootClass = ['fleet-map-root relative rounded-2xl overflow-hidden border border-slate-200 shadow-2xl', mapShellClassName]
+    .filter(Boolean)
+    .join(' ');
+
   return (
-    <div className="fleet-map-root relative rounded-2xl overflow-hidden border border-slate-200 shadow-2xl" style={{ height }}>
+    <div ref={rootRef} className={rootClass} style={mapShellClassName ? undefined : { height }}>
       {showCitySearch && !pickupCoords && (
         <MapCitySearch onSelectCity={handleSelectCity} currentLabel={cityLabel} />
       )}
 
+      {!mapReady ? (
+        <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-500 bg-slate-100">
+          Preparing map…
+        </div>
+      ) : (
       <MapContainer
         center={mapCenter}
         zoom={mapZoom}
-        style={{ height: '100%', width: '100%' }}
+        minZoom={2}
+        maxZoom={18}
+        style={{ height: '100%', width: '100%', minHeight: 280 }}
         scrollWheelZoom={true}
       >
+        <MapInvalidateSize />
         <ChangeView center={mapCenter} zoom={mapZoom} animate={viewAnimate || !!pickupCoords} />
-        <TileLayer
-          attribution={
-            mapboxTiles?.attribution ||
-            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
-          }
-          url={mapboxTiles?.url || fallbackTileUrl}
-          tileSize={mapboxTiles?.tileSize}
-          zoomOffset={mapboxTiles?.zoomOffset}
-          maxZoom={mapboxTiles?.maxZoom || 20}
-        />
+        {mapboxTiles ? (
+          <TileLayer
+            url={mapboxTiles.url}
+            attribution={mapboxTiles.attribution}
+            tileSize={mapboxTiles.tileSize}
+            zoomOffset={mapboxTiles.zoomOffset}
+            minZoom={mapboxTiles.minZoom}
+            maxZoom={mapboxTiles.maxZoom}
+            maxNativeZoom={mapboxTiles.maxNativeZoom}
+          />
+        ) : (
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
+            url={fallbackTileUrl}
+            maxZoom={20}
+          />
+        )}
 
         {/* Vehicles */}
         {vehicles.map((v) => {
-          if (!v.latitude || !v.longitude) return null;
+          if (!isValidLatLng(v.latitude, v.longitude)) return null;
           return (
             <Marker
               key={v.id}
@@ -397,8 +522,8 @@ export default function FleetMap({
 
         {/* Drivers (live positions) */}
         {drivers.map((d) => {
-          if (!d.latitude || !d.longitude) return null;
-          const pos = [d.latitude, d.longitude];
+          if (!isValidLatLng(d.latitude, d.longitude)) return null;
+          const pos = [Number(d.latitude), Number(d.longitude)];
           const isAssigned = highlightDriverId && d.id === highlightDriverId;
           return (
             <Marker
@@ -474,6 +599,7 @@ export default function FleetMap({
           />
         )}
       </MapContainer>
+      )}
 
       {routeInfo && (
         <div className="absolute top-3 right-3 z-[1000] glass-panel px-3 py-1.5 rounded-xl text-xs flex items-center gap-2 shadow-lg border border-brand-200">
@@ -524,5 +650,15 @@ export default function FleetMap({
         </span>
       </div>
     </div>
+  );
+}
+
+export default function FleetMap(props) {
+  const height =
+    props.height || (props.mapShellClassName ? 'min(58vh, 640px)' : '460px');
+  return (
+    <FleetMapErrorBoundary height={height}>
+      <FleetMapInner {...props} />
+    </FleetMapErrorBoundary>
   );
 }

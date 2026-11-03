@@ -19,6 +19,7 @@ import {
   shouldShowLiveNavToPickup,
 } from '../utils/tripLocationRules';
 import useMapboxDrivingRoutes from '../hooks/useMapboxDrivingRoutes';
+import useMapMarkerIconUris from '../hooks/useMapMarkerIconUris';
 import { MapSkeleton } from './Skeleton';
 
 /**
@@ -140,6 +141,11 @@ export default function TripLiveMap({
   const driverIconUrl = getDriverCarIconUri();
   const staffIconUrl = getStaffMarkerIconUri();
   const destIconUrl = getDestinationMarkerIconUri();
+  const resolvedMarkers = useMapMarkerIconUris();
+  const driverIconResolved = resolvedMarkers?.car || driverIconUrl;
+  const staffIconResolved = resolvedMarkers?.staff || staffIconUrl;
+  const destIconResolved = resolvedMarkers?.dest || destIconUrl;
+  const markersReady = Boolean(resolvedMarkers);
 
   const hasMap =
     alwaysShow ||
@@ -209,20 +215,24 @@ export default function TripLiveMap({
     focusUserLat: userLat,
     focusUserLng: userLng,
     zoom: focusZoom,
-    driverIconUrl,
-    staffIconUrl,
-    destIconUrl,
+    driverIconUrl: driverIconResolved,
+    staffIconUrl: staffIconResolved,
+    destIconUrl: destIconResolved,
     initialPickMode: pickMode || null,
     initialPickLat: pickMode ? pickLat : null,
     initialPickLng: pickMode ? pickLng : null,
   };
   buildInputsRef.current = mapInputs;
 
-  const html = useMemo(() => buildTripMapHtml(mapInputs), [
+  const html = useMemo(() => {
+    if (!markersReady) return '<!DOCTYPE html><html><body style="background:#dfe7e2"></body></html>';
+    return buildTripMapHtml(mapInputs);
+  }, [
     mapKey,
-    driverIconUrl,
-    staffIconUrl,
-    destIconUrl,
+    driverIconResolved,
+    staffIconResolved,
+    destIconResolved,
+    markersReady,
     tripPhase,
     navMeta.title,
     mode,
@@ -364,7 +374,7 @@ export default function TripLiveMap({
   return (
     <View style={outerStyle}>
       <View style={mapWrapStyle}>
-        {!mapReady ? (
+        {!mapReady || !markersReady ? (
           <View style={[StyleSheet.absoluteFill, { zIndex: 2 }]}>
             <MapSkeleton height={fullBleed ? 400 : height || 280} />
           </View>
@@ -380,6 +390,10 @@ export default function TripLiveMap({
             ref={webviewRef}
             key={mapKey}
             originWhitelist={['*']}
+            allowFileAccess
+            allowFileAccessFromFileURLs
+            allowUniversalAccessFromFileURLs
+            mixedContentMode="always"
             source={{ html, baseUrl: 'https://tmlogistx.local' }}
             scrollEnabled={false}
             style={styles.webview}
@@ -392,6 +406,15 @@ export default function TripLiveMap({
               htmlReadyRef.current = true;
               setMapReady(true);
               sendToMap(lastPayloadRef.current);
+              if (Platform.OS === 'android') {
+                webviewRef.current?.injectJavaScript(`
+                  (function(){
+                    if (window.__invalidateTripMap) window.__invalidateTripMap();
+                    setTimeout(function(){ if (window.__invalidateTripMap) window.__invalidateTripMap(); }, 120);
+                    setTimeout(function(){ if (window.__invalidateTripMap) window.__invalidateTripMap(); }, 400);
+                  })(); true;
+                `);
+              }
             }}
           />
         )}

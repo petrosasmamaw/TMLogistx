@@ -1,4 +1,5 @@
 import { getMapboxAccessToken, getMapboxStyleId } from './mapbox';
+import { OSM_TILE_ATTRIBUTION, OSM_TILE_URL } from './mapTiles';
 
 /**
  * Trip map with Mapbox driving paths (not straight lines).
@@ -86,14 +87,14 @@ export function buildTripMapHtml({
 <html>
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="color-scheme" content="light" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <style>
     html, body, #map { height: 100%; margin: 0; background: #dfe7e2; }
     .leaflet-control-attribution { display: none !important; }
-    .carto-attr {
+    .map-attr {
       position: absolute; bottom: 92px; right: 8px; z-index: 800;
       font: 500 9px system-ui,sans-serif; color: #444;
       background: rgba(255,255,255,.7); border-radius: 4px; padding: 0 4px;
@@ -103,7 +104,7 @@ export function buildTripMapHtml({
 </head>
 <body>
   <div id="map"></div>
-  <div class="carto-attr">© OpenStreetMap · CARTO</div>
+  <div class="map-attr">${OSM_TILE_ATTRIBUTION}</div>
   <script>
     (function () {
       var mapboxToken = ${tokenJson};
@@ -125,8 +126,8 @@ export function buildTripMapHtml({
           attribution: ''
         }).addTo(map);
       } else {
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-          subdomains: 'abcd', maxZoom: 19, attribution: ''
+        L.tileLayer(${JSON.stringify(OSM_TILE_URL)}, {
+          maxZoom: 19, attribution: ''
         }).addTo(map);
       }
       function pinIcon(color) {
@@ -144,32 +145,29 @@ export function buildTripMapHtml({
       function imgMarker(url, w, h, ax, ay, shadow) {
         if (!url) return null;
         var sh = shadow || 'drop-shadow(0 2px 5px rgba(15,31,25,.35))';
+        var safeUrl = String(url).replace(/"/g, '&quot;');
         return L.divIcon({
           className: '',
-          html: '<img src="' + url + '" alt="" style="width:' + w + 'px;height:' + h + 'px;object-fit:contain;display:block;filter:' + sh + '" />',
+          html: '<img src="' + safeUrl + '" alt="" style="width:' + w + 'px;height:' + h + 'px;object-fit:contain;display:block;filter:' + sh + '" />',
           iconSize: [w, h],
           iconAnchor: [ax, ay]
         });
       }
       function staffLocationIcon() {
-        var staffIc = imgMarker(staffMarkerImg, 28, 28, 14, 26);
+        var staffIc = imgMarker(staffMarkerImg, 32, 32, 16, 28);
         if (staffIc) return staffIc;
         return pinIcon('#0b7a5a');
       }
       function destinationIcon() {
-        var destIc = imgMarker(destMarkerImg, 28, 35, 14, 33, 'drop-shadow(0 2px 5px rgba(15,31,25,.35))');
+        var destIc = imgMarker(destMarkerImg, 32, 40, 16, 36, 'drop-shadow(0 2px 5px rgba(15,31,25,.35))');
         if (destIc) return destIc;
         return pinIcon('#d64545');
       }
       function icon(type) {
         if (type === 'driver') {
           if (driverCarImg) {
-            return L.divIcon({
-              className: '',
-              html: '<img src="' + driverCarImg + '" alt="" style="width:28px;height:28px;object-fit:contain;display:block;filter:drop-shadow(0 2px 5px rgba(15,31,25,.35))" />',
-              iconSize: [28, 28],
-              iconAnchor: [14, 14]
-            });
+            var carIc = imgMarker(driverCarImg, 32, 32, 16, 16);
+            if (carIc) return carIc;
           }
           return L.divIcon({
             className: '',

@@ -21,7 +21,8 @@
         "EXPO_PUBLIC_SOCKET_URL": "https://tmlogistx.onrender.com",
         "EXPO_PUBLIC_APP_NAME": "TMLogistx Mobile",
         "EXPO_PUBLIC_DEFAULT_LANGUAGE": "en",
-        "EXPO_PUBLIC_GPS_UPDATE_INTERVAL_MS": "10000"
+        "EXPO_PUBLIC_GPS_UPDATE_INTERVAL_MS": "10000",
+        "EXPO_PUBLIC_MAPBOX_STYLE": "mapbox/streets-v12"
       }
     },
     "production": {

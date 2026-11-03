@@ -99,14 +99,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   rootOverlay: {
+    flex: 1,
+    width: '100%',
     minHeight: 0,
   },
   mapLayer: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
     width: '100%',
     minHeight: 280,
     overflow: 'hidden',
     zIndex: 0,
+    position: 'relative',
   },
   mapOverlayLayer: {
     ...StyleSheet.absoluteFillObject,

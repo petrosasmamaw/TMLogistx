@@ -7,6 +7,8 @@ dist/
 build/
 .expo/
 web-app/dist/
+mobile-app/builds/*.apk
+mobile-app/builds/eas-build-log.txt
 *.log
 
 # Secrets & local env

@@ -18,12 +18,14 @@ export function getMapboxStyleId() {
 export function getMapboxLeafletTileConfig() {
   if (!TOKEN) return null;
   return {
-    url: `https://api.mapbox.com/styles/v1/${STYLE}/tiles/512/{z}/{x}/{y}@2x?access_token=${TOKEN}`,
+    url: `https://api.mapbox.com/styles/v1/${STYLE}/tiles/512/{z}/{x}/{y}?access_token=${TOKEN}`,
     attribution:
       '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     tileSize: 512,
     zoomOffset: -1,
-    maxZoom: 22
+    minZoom: 0,
+    maxZoom: 20,
+    maxNativeZoom: 22,
   };
 }
 

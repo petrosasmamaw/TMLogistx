@@ -1,0 +1,5 @@
+builds/*.apk
+builds/build-meta.json
+builds/eas-build-log.txt
+.expo-export-test/
+.expo-export-test2/

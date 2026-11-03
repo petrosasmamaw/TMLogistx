@@ -20,10 +20,11 @@ export default function MapPickControls({
   const insets = useSafeAreaInsets();
   const title = kind === 'destination' ? 'Choose destination' : 'Choose start point';
   const pinColor = kind === 'destination' ? colors.danger : colors.primary;
+  const topPad = insets.top + 56;
 
   return (
     <View style={styles.wrap} pointerEvents="box-none">
-      <View style={[styles.hintCard, floatingShadow(false)]}>
+      <View style={[styles.hintCard, floatingShadow(false), { marginTop: topPad }]}>
         <View style={[styles.pinBadge, { backgroundColor: pinColor }]}>
           <Ionicons name="location" size={18} color="#fff" />
         </View>
@@ -69,7 +70,6 @@ const styles = StyleSheet.create({
   wrap: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'space-between',
-    paddingTop: spacing.xl,
     paddingHorizontal: spacing.screen,
     zIndex: 20,
   },
