@@ -17,6 +17,7 @@ import {
   shouldShowMovementCenterDestPin,
   shouldShowMovementCenterPickupPin,
 } from '../utils/tripLocationRules.js';
+import { getOsmLeafletTileOptions } from '../utils/mapTiles.js';
 
 const MAPBOX_TOKEN = getMapboxAccessToken();
 
@@ -443,7 +444,7 @@ function FleetMapInner({
   );
 
   const mapboxTiles = getMapboxLeafletTileConfig();
-  const fallbackTileUrl = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+  const osmTiles = getOsmLeafletTileOptions();
 
   const rootClass = ['fleet-map-root relative rounded-2xl overflow-hidden border border-slate-200 shadow-2xl', mapShellClassName]
     .filter(Boolean)
@@ -482,9 +483,10 @@ function FleetMapInner({
           />
         ) : (
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
-            url={fallbackTileUrl}
-            maxZoom={20}
+            url={osmTiles.url}
+            attribution={osmTiles.attribution}
+            maxZoom={osmTiles.maxZoom}
+            subdomains={osmTiles.subdomains}
           />
         )}
 
