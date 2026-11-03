@@ -65,6 +65,20 @@ function clampMapZoom(z) {
   return Math.min(18, Math.max(2, Math.round(n)));
 }
 
+function requestPickupCoords(trip) {
+  if (!trip || !shouldShowMovementCenterPickupPin(trip)) return null;
+  const lat = Number(trip.pickup_lat ?? trip.pickup_latitude);
+  const lng = Number(trip.pickup_lng ?? trip.pickup_longitude);
+  return isValidLatLng(lat, lng) ? [lat, lng] : null;
+}
+
+function requestDestCoords(trip) {
+  if (!trip || !shouldShowMovementCenterDestPin(trip)) return null;
+  const lat = Number(trip.destination_lat ?? trip.destination_latitude);
+  const lng = Number(trip.destination_lng ?? trip.destination_longitude);
+  return isValidLatLng(lat, lng) ? [lat, lng] : null;
+}
+
 const DEFAULT_CENTER = FALLBACK_MAP_CENTER;
 const DEFAULT_CITY_LABEL = FALLBACK_MAP_LABEL;
 const CITY_ZOOM = CITY_MAP_ZOOM;
@@ -369,7 +383,8 @@ function FleetMapInner({
   const [cityZoom, setCityZoom] = useState(initialZoom);
   const [cityLabel, setCityLabel] = useState(initialLabel);
   const [viewAnimate, setViewAnimate] = useState(false);
-  const [mapboxTiles, setMapboxTiles] = useState(() => getMapboxLeafletTileConfig());
+  const [mapConfigReady, setMapConfigReady] = useState(false);
+  const [mapboxTiles, setMapboxTiles] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -379,7 +394,8 @@ function FleetMapInner({
         cfg?.mapboxPublicToken,
         cfg?.mapboxStyle
       );
-      setMapboxTiles(built || null);
+      setMapboxTiles(built);
+      setMapConfigReady(true);
     });
     return () => {
       cancelled = true;
@@ -420,18 +436,8 @@ function FleetMapInner({
     setViewAnimate(true);
   }, []);
 
-  const pickupCoords =
-    selectedRequest &&
-    shouldShowMovementCenterPickupPin(selectedRequest) &&
-    isValidLatLng(selectedRequest.pickup_lat, selectedRequest.pickup_lng)
-      ? [Number(selectedRequest.pickup_lat), Number(selectedRequest.pickup_lng)]
-      : null;
-  const destCoords =
-    selectedRequest &&
-    shouldShowMovementCenterDestPin(selectedRequest) &&
-    isValidLatLng(selectedRequest.destination_lat, selectedRequest.destination_lng)
-      ? [Number(selectedRequest.destination_lat), Number(selectedRequest.destination_lng)]
-      : null;
+  const pickupCoords = selectedRequest ? requestPickupCoords(selectedRequest) : null;
+  const destCoords = selectedRequest ? requestDestCoords(selectedRequest) : null;
 
   const highlightedDriver =
     highlightDriverId && drivers.find((d) => d.id === highlightDriverId);
@@ -444,7 +450,7 @@ function FleetMapInner({
       pickupCoords
   );
 
-  const { planRouteCoords, liveRouteCoords, routeMeta } = useMapboxDrivingRoutes({
+  const { planRouteCoords, liveRouteCoords, routeMeta, routesLoading } = useMapboxDrivingRoutes({
     pickupLat: planRouteEnabled ? pickupCoords[0] : null,
     pickupLng: planRouteEnabled ? pickupCoords[1] : null,
     destLat: planRouteEnabled ? destCoords[0] : null,
@@ -473,14 +479,17 @@ function FleetMapInner({
   const resolvedFitMode =
     fitMode === 'auto' ? (pickupCoords && destCoords ? 'trip' : 'fleet') : fitMode;
 
+  const showPlanRoute = Boolean(routeMeta?.planKm && planRouteCoords.length >= 2);
+  const showLiveRoute = Boolean(routeMeta?.liveKm && liveRouteCoords.length >= 2);
+
   const fitPoints = useMemo(() => {
     if (resolvedFitMode === 'trip' && pickupCoords && destCoords) {
       const pts = [pickupCoords, destCoords];
-      if (planRouteCoords?.length) {
-        pts.push(planRouteCoords[0], planRouteCoords[planRouteCoords.length - 1]);
+      if (showPlanRoute) {
+        planRouteCoords.forEach((c) => pts.push(c));
       }
-      if (liveRouteCoords?.length) {
-        pts.push(liveRouteCoords[0], liveRouteCoords[liveRouteCoords.length - 1]);
+      if (showLiveRoute) {
+        liveRouteCoords.forEach((c) => pts.push(c));
       }
       drivers.forEach((d) => {
         if (isValidLatLng(d.latitude, d.longitude)) {
@@ -507,6 +516,8 @@ function FleetMapInner({
     destCoords,
     planRouteCoords,
     liveRouteCoords,
+    showPlanRoute,
+    showLiveRoute,
     mapCenter,
     drivers,
     vehicles,
@@ -542,12 +553,13 @@ function FleetMapInner({
         <MapCitySearch onSelectCity={handleSelectCity} currentLabel={cityLabel} />
       )}
 
-      {!mapReady ? (
-        <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-500 bg-slate-100">
+      {!mapReady || !mapConfigReady ? (
+        <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-500 bg-[#dfe7e2]">
           Preparing map…
         </div>
       ) : (
       <MapContainer
+        key={mapboxTiles ? 'mapbox' : 'osm'}
         center={mapCenter}
         zoom={mapZoom}
         minZoom={1}
@@ -699,7 +711,7 @@ function FleetMapInner({
         )}
 
         {/* Mapbox driving route (or straight polyline fallback) */}
-        {pickupCoords && destCoords && planRouteCoords.length >= 2 && (
+        {pickupCoords && destCoords && showPlanRoute && (
           <Polyline
             positions={planRouteCoords}
             color="#0b7a5a"
@@ -709,7 +721,7 @@ function FleetMapInner({
             lineCap="round"
           />
         )}
-        {liveRouteCoords.length >= 2 && (
+        {showLiveRoute && (
           <Polyline
             positions={liveRouteCoords}
             color="#f5a524"
@@ -720,6 +732,12 @@ function FleetMapInner({
           />
         )}
       </MapContainer>
+      )}
+
+      {planRouteEnabled && routesLoading && (
+        <div className="absolute bottom-14 left-3 z-[1000] glass-panel px-3 py-1.5 rounded-lg text-[11px] text-slate-600 shadow-md">
+          Loading road route…
+        </div>
       )}
 
       {routeMeta?.planKm && (

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { loadMapRuntimeConfig } from '../utils/mapRuntime.js';
 import { mapboxDrivingRoute } from '../utils/mapbox.js';
 
 function coordKey(lat, lng) {
@@ -6,7 +7,7 @@ function coordKey(lat, lng) {
   return `${Number(lat).toFixed(4)},${Number(lng).toFixed(4)}`;
 }
 
-/** Same driving-route logic as mobile useMapboxDrivingRoutes. */
+/** Road-following routes only (no straight-line fallback on web dispatch map). */
 export default function useMapboxDrivingRoutes({
   pickupLat,
   pickupLng,
@@ -28,29 +29,19 @@ export default function useMapboxDrivingRoutes({
     let cancelled = false;
     (async () => {
       setPlanLoading(true);
-      let plan = [];
-      let planKm = null;
+      setPlanRouteCoords([]);
+      setRouteMeta((m) => ({ ...m, planKm: null }));
 
       if (pickupLat != null && pickupLng != null && destLat != null && destLng != null) {
+        await loadMapRuntimeConfig();
         const planRes = await mapboxDrivingRoute(pickupLat, pickupLng, destLat, destLng);
-        if (!cancelled && planRes?.coordinates?.length) {
-          plan = planRes.coordinates;
-          planKm = planRes.distanceKm;
+        if (!cancelled && planRes?.coordinates?.length >= 2) {
+          setPlanRouteCoords(planRes.coordinates);
+          setRouteMeta((m) => ({ ...m, planKm: planRes.distanceKm }));
         }
       }
 
-      if (!plan.length && pickupLat != null && destLat != null) {
-        plan = [
-          [pickupLat, pickupLng],
-          [destLat, destLng],
-        ];
-      }
-
-      if (!cancelled) {
-        setPlanRouteCoords(plan);
-        setRouteMeta((m) => ({ ...m, planKm }));
-        setPlanLoading(false);
-      }
+      if (!cancelled) setPlanLoading(false);
     })();
 
     return () => {
@@ -68,9 +59,8 @@ export default function useMapboxDrivingRoutes({
     if (liveDebounceRef.current) clearTimeout(liveDebounceRef.current);
 
     liveDebounceRef.current = setTimeout(async () => {
-      let live = [];
-      let liveKm = null;
-      let liveMins = null;
+      setLiveRouteCoords([]);
+      setRouteMeta((m) => ({ ...m, liveKm: null, liveMins: null }));
 
       if (
         driverLat != null &&
@@ -78,23 +68,17 @@ export default function useMapboxDrivingRoutes({
         liveTargetLat != null &&
         liveTargetLng != null
       ) {
+        await loadMapRuntimeConfig();
         const liveRes = await mapboxDrivingRoute(driverLat, driverLng, liveTargetLat, liveTargetLng);
-        if (liveRes?.coordinates?.length) {
-          live = liveRes.coordinates;
-          liveKm = liveRes.distanceKm;
-          liveMins = liveRes.timeMins;
+        if (liveRes?.coordinates?.length >= 2) {
+          setLiveRouteCoords(liveRes.coordinates);
+          setRouteMeta((m) => ({
+            ...m,
+            liveKm: liveRes.distanceKm,
+            liveMins: liveRes.timeMins,
+          }));
         }
       }
-
-      if (!live.length && driverLat != null && liveTargetLat != null) {
-        live = [
-          [driverLat, driverLng],
-          [liveTargetLat, liveTargetLng],
-        ];
-      }
-
-      setLiveRouteCoords(live);
-      setRouteMeta((m) => ({ ...m, liveKm, liveMins }));
     }, 600);
 
     return () => {

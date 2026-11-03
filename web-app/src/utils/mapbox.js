@@ -1,7 +1,8 @@
 /**
- * Mapbox helpers — matches mobile-app/src/utils/mapbox.js tile + route behavior.
+ * Mapbox helpers — aligned with mobile-app/src/utils/mapbox.js (512 @2x tiles + driving routes).
  */
 import { apiRequest } from '../api/client.js';
+import { loadMapRuntimeConfig } from './mapRuntime.js';
 import { getEffectiveMapboxStyle, getEffectiveMapboxToken } from './mapboxSession.js';
 
 export function getMapboxAccessToken() {
@@ -12,7 +13,7 @@ export function getMapboxStyleId() {
   return getEffectiveMapboxStyle();
 }
 
-/** Same Leaflet layer as mobile TripLiveMap (512 @2x, streets-v12). */
+/** Same Leaflet layer as mobile TripLiveMap WebView map. */
 export function buildMapboxLeafletTileConfig(token, style = getEffectiveMapboxStyle()) {
   if (!token?.startsWith('pk.')) return null;
   return {
@@ -37,23 +38,38 @@ function authQuery(token) {
   return `access_token=${encodeURIComponent(token)}`;
 }
 
-async function fetchRouteViaServer(lat1, lon1, lat2, lon2) {
+function asCoords(lat1, lon1, lat2, lon2) {
+  const a = Number(lat1);
+  const b = Number(lon1);
+  const c = Number(lat2);
+  const d = Number(lon2);
+  if (![a, b, c, d].every(Number.isFinite)) return null;
+  return { a, b, c, d };
+}
+
+export async function fetchDrivingRouteFromApi(lat1, lon1, lat2, lon2) {
+  const coords = asCoords(lat1, lon1, lat2, lon2);
+  if (!coords) return null;
   try {
     const q = new URLSearchParams({
-      from_lat: String(lat1),
-      from_lng: String(lon1),
-      to_lat: String(lat2),
-      to_lng: String(lon2),
+      from_lat: String(coords.a),
+      from_lng: String(coords.b),
+      to_lat: String(coords.c),
+      to_lng: String(coords.d),
     });
     const res = await apiRequest(`/geo/driving-route?${q.toString()}`);
-    return res.data || null;
+    const data = res.data;
+    if (data?.coordinates?.length >= 2) return data;
   } catch {
-    return null;
+    /* try Mapbox direct next */
   }
+  return null;
 }
 
 async function fetchRouteViaMapbox(lat1, lon1, lat2, lon2, token) {
-  const path = `${lon1},${lat1};${lon2},${lat2}`;
+  const coords = asCoords(lat1, lon1, lat2, lon2);
+  if (!coords) return null;
+  const path = `${coords.b},${coords.a};${coords.d},${coords.c}`;
   const url =
     `https://api.mapbox.com/directions/v5/mapbox/driving/${path}?` +
     `${authQuery(token)}&geometries=geojson&overview=full&alternatives=false`;
@@ -69,17 +85,29 @@ async function fetchRouteViaMapbox(lat1, lon1, lat2, lon2, token) {
   };
 }
 
+/** Fastest driving path (road network). Server API first — same token as Render mobile API. */
 export async function mapboxDrivingRoute(lat1, lon1, lat2, lon2) {
-  if ([lat1, lon1, lat2, lon2].some((v) => v == null)) return null;
-  const token = getEffectiveMapboxToken();
-  if (token) {
-    const direct = await fetchRouteViaMapbox(lat1, lon1, lat2, lon2, token);
-    if (direct) return direct;
+  await loadMapRuntimeConfig();
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const fromApi = await fetchDrivingRouteFromApi(lat1, lon1, lat2, lon2);
+    if (fromApi?.coordinates?.length >= 2) return fromApi;
+
+    const token = getEffectiveMapboxToken();
+    if (token) {
+      const direct = await fetchRouteViaMapbox(lat1, lon1, lat2, lon2, token);
+      if (direct?.coordinates?.length >= 2) return direct;
+    }
+
+    if (attempt === 0) {
+      await new Promise((r) => setTimeout(r, 350));
+    }
   }
-  return fetchRouteViaServer(lat1, lon1, lat2, lon2);
+  return null;
 }
 
 export async function mapboxForwardGeocode(query, { limit = 8, types = 'place,locality,region' } = {}) {
+  await loadMapRuntimeConfig();
   const token = getEffectiveMapboxToken();
   if (!token || !query?.trim()) return [];
   const q = encodeURIComponent(query.trim());
@@ -98,6 +126,7 @@ export async function mapboxForwardGeocode(query, { limit = 8, types = 'place,lo
 }
 
 export async function mapboxReverseGeocode(lat, lng) {
+  await loadMapRuntimeConfig();
   const token = getEffectiveMapboxToken();
   if (!token) return null;
   const url =

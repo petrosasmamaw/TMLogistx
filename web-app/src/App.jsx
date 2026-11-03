@@ -24,6 +24,14 @@ export default function App() {
     }
   }, [dispatch]);
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      import('./utils/mapRuntime.js').then(({ loadMapRuntimeConfig }) => {
+        loadMapRuntimeConfig();
+      });
+    }
+  }, [isAuthenticated]);
+
   if (initializing) {
     return <SessionLayoutSkeleton />;
   }
